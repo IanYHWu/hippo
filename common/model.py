@@ -6,7 +6,7 @@ import torch
 class Flatten(nn.Module):
     @staticmethod
     def forward(x):
-        return x.view(x.size(0), -1)
+        return x.reshape(x.size(0), -1)
 
 
 class SmallModel(nn.Module):
