@@ -17,7 +17,7 @@ class SmallModel(nn.Module):
             nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2), nn.ReLU(),
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1), nn.ReLU(),
             Flatten(),
-            nn.Linear(in_features=64 * 7 * 7, out_features=512), nn.ReLU()
+            nn.Linear(in_features=64 * 4 * 4, out_features=512), nn.ReLU()
         )
         self.output_dim = 512
         self.apply(orthogonal_init)

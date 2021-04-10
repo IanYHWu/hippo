@@ -7,10 +7,28 @@ import time
 
 
 class PPO(BaseAgent):
-    def __init__(self, env, actor_critic, logger, storage, device, n_checkpoints=10, n_steps=128, n_envs=8, epoch=3,
-                 mini_batch_per_epoch=8, mini_batch_size=32*8, gamma=0.99, lmbda=0.95, learning_rate=2.5e-4,
-                 grad_clip_norm=0.5, eps_clip=0.2, value_coef=0.5, entropy_coef=0.01, normalise_adv=True,
-                 normalise_reward=True, use_gae=True):
+    def __init__(self,
+                 env,
+                 actor_critic,
+                 logger,
+                 storage,
+                 device,
+                 n_checkpoints=10,
+                 n_steps=128,
+                 n_envs=8,
+                 epoch=3,
+                 mini_batch_per_epoch=8,
+                 mini_batch_size=32*8,
+                 gamma=0.99,
+                 lmbda=0.95,
+                 learning_rate=2.5e-4,
+                 grad_clip_norm=0.5,
+                 eps_clip=0.2,
+                 value_coef=0.5,
+                 entropy_coef=0.01,
+                 normalise_adv=True,
+                 normalise_reward=True,
+                 use_gae=True):
 
         super().__init__(env, actor_critic, logger, storage, device, n_checkpoints)
 
@@ -132,7 +150,7 @@ class PPO(BaseAgent):
                 self.logger.save_model(self.actor_critic)
                 checkpoint_count += 1
         print("Training complete")
-        print("Wall time: {}".format(start_ - time.time()))
+        print("Wall time: {}".format(time.time() - start_))
         self.env.close()
 
 

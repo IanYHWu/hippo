@@ -21,10 +21,8 @@ class Logger(object):
         self.root_path = None
         self.checkpoint_path = None
         self.log_path = None
+        self.summary_path = None
         self.n_envs = params.n_envs
-
-        self._make_dirs()
-        self._initialise_writer()
 
         self.episode_rewards = []
         for _ in range(params.n_envs):
@@ -39,6 +37,9 @@ class Logger(object):
         self.timesteps = 0
         self.num_episodes = 0
 
+        self._make_dirs()
+        self._initialise_writer()
+
     def _make_dirs(self):
         root_path = self.root + '/' + self.name
         if not os.path.isdir(root_path):
@@ -46,9 +47,13 @@ class Logger(object):
         checkpoint_path = root_path + '/checkpoint'
         if not os.path.isdir(checkpoint_path):
             os.makedirs(checkpoint_path)
+        summary_path = root_path + '/summary'
+        if not os.path.isdir(summary_path):
+            os.makedirs(summary_path)
         self.root_path = root_path
         self.checkpoint_path = checkpoint_path + '/checkpoint'
         self.log_path = self.root_path + '/' + self.name + '.csv'
+        self.summary_path = summary_path
 
     def save_model(self, model):
         torch.save({
@@ -85,25 +90,20 @@ class Logger(object):
             self.writer.add_scalar(key, value, self.timesteps)
 
     def _initialise_writer(self):
-        self.writer = SummaryWriter(self.log_path)
+        self.writer = SummaryWriter(self.summary_path)
 
     def dump(self):
         wall_time = time.time() - self.start_time
         if self.num_episodes > 0:
             episode_statistics = self._get_episode_statistics()
             episode_statistics_list = list(episode_statistics.values())
-            print(episode_statistics)
             for key, value in episode_statistics.items():
-                print(key, value, self.timesteps)
                 self.writer.add_scalar(key, value, self.timesteps)
         else:
             episode_statistics_list = [None] * 6
         log = [self.timesteps] + [wall_time] + [self.num_episodes] + episode_statistics_list
         self.log.loc[len(self.log)] = log
-
-        with open(self.log_path, 'w') as f:
-            self.log.to_csv(f, index=False)
-        print(self.log.loc[len(self.log) - 1])
+        self.log.to_csv(self.log_path, index=False)
 
     def _get_episode_statistics(self):
         episode_statistics = {'Rewards/max_episodes': np.max(self.episode_reward_buffer),
@@ -112,6 +112,7 @@ class Logger(object):
                               'Len/max_episodes': np.max(self.episode_len_buffer),
                               'Len/mean_episodes': np.mean(self.episode_len_buffer),
                               'Len/min_episodes': np.min(self.episode_len_buffer)}
+
         return episode_statistics
 
 

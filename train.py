@@ -17,7 +17,7 @@ def train(args, params):
     set_global_seeds(args.seed)
     set_global_log_levels(args.log_level)
     if args.device == 'gpu':
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_device)
+        # os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_device)
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
