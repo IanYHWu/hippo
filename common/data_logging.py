@@ -92,7 +92,9 @@ class Logger(object):
         if self.num_episodes > 0:
             episode_statistics = self._get_episode_statistics()
             episode_statistics_list = list(episode_statistics.values())
+            print(episode_statistics)
             for key, value in episode_statistics.items():
+                print(key, value, self.timesteps)
                 self.writer.add_scalar(key, value, self.timesteps)
         else:
             episode_statistics_list = [None] * 6
