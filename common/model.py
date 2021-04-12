@@ -93,7 +93,7 @@ class GRU(nn.Module):
             x = x.squeeze(0)
             hxs = hxs.squeeze(0)
         # Training
-        # We will recompute the hidden state to allow gradient to be back-propagated through time
+        # We will recompute the hidden state to allow the gradient to be back-propagated through time
         else:
             # x is a (T, N, -1) tensor that has been flatten to (T * N, -1)
             N = hxs.size(0)
@@ -101,7 +101,7 @@ class GRU(nn.Module):
 
             x = x.view(T, N, x.size(1))
 
-            # Same deal with masks
+            # Same deal with the masks
             masks = masks.view(T, N)
 
             # Let's figure out which steps in the sequence have a zero for any agent
