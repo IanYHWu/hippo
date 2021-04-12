@@ -1,4 +1,4 @@
-from agents.base_agent import BaseAgent
+from agents.ppo import PPO, get_args_ppo
 from common.utils import adjust_lr
 import torch
 import torch.optim as optim
@@ -6,7 +6,7 @@ import numpy as np
 import time
 
 
-class PPO(BaseAgent):
+class PPODemo(PPO):
     def __init__(self,
                  env,
                  actor_critic,
@@ -28,39 +28,15 @@ class PPO(BaseAgent):
                  entropy_coef=0.01,
                  normalise_adv=True,
                  normalise_reward=True,
-                 use_gae=True):
+                 use_gae=True,
+                 dem_coef=0.2):
 
-        super().__init__(env, actor_critic, logger, storage, device, n_checkpoints)
+        super().__init__(env, actor_critic, logger, storage, device, n_checkpoints, n_steps,
+                         epoch, mini_batch_per_epoch, mini_batch_size, gamma, lmbda, learning_rate, grad_clip_norm,
+                         eps_clip, value_coef, entropy_coef, normalise_adv, normalise_reward, use_gae)
+        self.dem_coef = dem_coef
 
-        self.n_steps = n_steps
-        self.n_envs = n_envs
-        self.epoch = epoch
-        self.mini_batch_per_epoch = mini_batch_per_epoch
-        self.mini_batch_size = mini_batch_size
-        self.gamma = gamma
-        self.lmbda = lmbda
-        self.learning_rate = learning_rate
-        self.optimizer = optim.Adam(self.actor_critic.parameters(), lr=learning_rate, eps=1e-5)
-        self.grad_clip_norm = grad_clip_norm
-        self.eps_clip = eps_clip
-        self.value_coef = value_coef
-        self.entropy_coef = entropy_coef
-        self.normalise_adv = normalise_adv
-        self.normalise_rew = normalise_reward
-        self.use_gae = use_gae
-
-    def predict(self, obs, hidden_state, done):
-        with torch.no_grad():
-            obs = torch.FloatTensor(obs).to(device=self.device)
-            hidden_state = torch.FloatTensor(hidden_state).to(device=self.device)
-            mask = torch.FloatTensor(1 - done).to(device=self.device)
-            dist, value, hidden_state = self.actor_critic(obs, hidden_state, mask)
-            act = dist.sample()
-            log_prob_act = dist.log_prob(act)
-
-        return act.cpu().numpy(), log_prob_act.cpu().numpy(), value.cpu().numpy(), hidden_state.cpu().numpy()
-
-    def optimize(self):
+    def demo_optimize(self):
         pi_loss_list, value_loss_list, entropy_loss_list = [], [], []
         batch_size = self.n_steps * self.n_envs // self.mini_batch_per_epoch
         if batch_size < self.mini_batch_size:
