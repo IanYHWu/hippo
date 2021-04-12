@@ -97,7 +97,6 @@ class PPO(BaseAgent):
                 loss = pi_loss + self.value_coef * value_loss - self.entropy_coef * entropy_loss
                 loss.backward()
 
-                # Let model to handle the large batch-size with small gpu-memory
                 if grad_accumulation_count % grad_accumulation_steps == 0:
                     torch.nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.grad_clip_norm)
                     self.optimizer.step()
