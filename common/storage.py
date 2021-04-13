@@ -246,7 +246,6 @@ class DemoReplayBuffer:
             if sample_method == 'uniform':
                 sampler = BatchSampler(SubsetRandomSampler(range(buffer_size)),
                                        mini_batch_size, drop_last=True)
-                print('here')
                 for indices in sampler:
                     obs_batch = torch.FloatTensor(self.obs_store.float()).reshape(-1, *self.obs_size)[indices].to(self.device)
                     hidden_state_batch = torch.FloatTensor(self.hidden_states_store.float()).reshape(
@@ -256,6 +255,8 @@ class DemoReplayBuffer:
                     returns_batch = torch.FloatTensor(self.returns_store.float()).reshape(-1)[indices].to(self.device)
                     print(act_batch)
                     yield obs_batch, hidden_state_batch, act_batch, mask_batch, returns_batch
+            else:
+                raise NotImplementedError
 
         else:
             raise NotImplementedError
@@ -284,7 +285,6 @@ if __name__ == '__main__':
 
         ds.stores_to_tensors()
         ds.compute_returns()
-
 
         rb.store(ds.obs_store, ds.hidden_states_store, ds.act_store, ds.returns_store, ds.trajectory_length)
 
