@@ -16,7 +16,7 @@ class PPO(BaseAgent):
                  epoch=3,
                  mini_batch_per_epoch=8,
                  mini_batch_size=32*8,
-                 learning_rate=2.5e-4,
+                 learning_rate=5e-4,
                  grad_clip_norm=0.5,
                  eps_clip=0.2,
                  value_coef=0.5,
