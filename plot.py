@@ -10,5 +10,5 @@ def plot_from_csv(path, col_x, col_y):
 
 
 if __name__ == "__main__":
-    plot_from_csv('../first_run.csv', col_x='num_timesteps', col_y='mean_episode_rewards')
+    plot_from_csv('../../first_run_caveflyer.csv', col_x='timesteps', col_y='mean_episode_rewards')
 
