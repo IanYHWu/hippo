@@ -42,7 +42,7 @@ class PPO(BaseAgent):
             hidden_state = torch.FloatTensor(hidden_state).to(device=self.device)
             mask = torch.FloatTensor(1 - done).to(device=self.device)
             dist, value, hidden_state = self.actor_critic(obs, hidden_state, mask)
-            act = dist.sample()
+            act = dist.sample().reshape(-1)
             log_prob_act = dist.log_prob(act)
 
         return act.cpu().numpy(), log_prob_act.cpu().numpy(), value.cpu().numpy(), hidden_state.cpu().numpy()
