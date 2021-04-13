@@ -16,8 +16,9 @@ easy:
     normalise_reward: True
     use_gae: True
     algo: ppo
-    architecture: impala
+    architecture: Small
     recurrent: False
+    hidden_size: 256
 
 tiny:
     n_envs: 2
@@ -39,3 +40,4 @@ tiny:
     algo: ppo
     architecture: small
     recurrent: False
+    hidden_size: 256

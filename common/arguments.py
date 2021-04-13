@@ -35,13 +35,10 @@ parser.add_argument(
     '--device', type=str, default='gpu', required=False, help='Device to use'
 )
 parser.add_argument(
-    '--gpu_device', type=int, default=int(0), required=False, help='Visible device in CUDA'
-)
-parser.add_argument(
     '--num_timesteps', type=int, default=int(25000000), help='Number of training timesteps'
 )
 parser.add_argument(
-    '--seed', type=int, default=random.randint(0, 9999), help='Random generator seed'
+    '--seed', type=int, default=int(28), help='Random generator seed'
 )
 parser.add_argument(
     '--log_level', type=int, default=int(40), help='Number of levels per log - {10,20,30,40}'

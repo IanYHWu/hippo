@@ -22,28 +22,28 @@ def load_env(args, params):
 
 
 def load_model(params, env, device):
-    observation_space = env.observation_space
-    observation_shape = observation_space.shape
+    observation_shape = env.observation_space.shape
     architecture = params.architecture
-    in_channels = observation_shape[0]
-    action_space = env.action_space
+    recurrent = params.recurrent
 
     # Model architecture
-    if architecture == 'small':
-        embedder_model = SmallModel(in_channels=in_channels)
-    else:
-        embedder_model = ImpalaModel(in_channels=in_channels)
-
-    # Discrete action space
-    recurrent = params.recurrent
-    if isinstance(action_space, gym.spaces.Discrete):
-        action_size = action_space.n
-        actor_critic = CategoricalAC(embedder_model, recurrent, action_size)
+    if len(observation_shape) == 3:
+        if architecture == 'Small':
+            base = SmallNetBase(observation_shape[0], input_h=observation_shape[1],
+                                input_w=observation_shape[2], recurrent=recurrent, hidden_size=params.hidden_size)
+        else:
+            base = ResNetBase(observation_shape[0], input_h=observation_shape[1],
+                              input_w=observation_shape[2], recurrent=recurrent, hidden_size=params.hidden_size)
+    elif len(observation_shape) == 1:
+        base = MLPBase(observation_shape, recurrent=recurrent, hidden_size=params.hidden_size)
     else:
         raise NotImplementedError
+
+    # Discrete action space
+    actor_critic = CategoricalAC(base, recurrent)
     actor_critic.to(device)
 
-    return embedder_model, actor_critic
+    return actor_critic
 
 
 def load_agent(env, actor_critic, logger, storage, device, params):

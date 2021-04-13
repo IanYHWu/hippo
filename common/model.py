@@ -1,113 +1,151 @@
-from .utils import orthogonal_init, xavier_uniform_init
-import torch.nn as nn
+import numpy as np
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+from common.utils import init
+
+
+init_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                       constant_(x, 0))
+
+init_relu_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                            constant_(x, 0), nn.init.calculate_gain('relu'))
+
+init_tanh_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
+                            constant_(x, 0), np.sqrt(2))
+
+
+def apply_init_(modules):
+    """
+    Initialize NN modules
+    """
+    for m in modules:
+        if isinstance(m, nn.Conv2d):
+            nn.init.xavier_uniform_(m.weight)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+            nn.init.constant_(m.weight, 1)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
 
 
 class Flatten(nn.Module):
-    @staticmethod
-    def forward(x):
+    """
+    Flatten a tensor
+    """
+    def forward(self, x):
         return x.reshape(x.size(0), -1)
 
 
-class SmallModel(nn.Module):
-    def __init__(self, in_channels):
-        super().__init__()
-        self.layers = nn.Sequential(
-            nn.Conv2d(in_channels=in_channels, out_channels=32, kernel_size=8, stride=4), nn.ReLU(),
-            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2), nn.ReLU(),
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1), nn.ReLU(),
-            Flatten(),
-            nn.Linear(in_features=64 * 4 * 4, out_features=512), nn.ReLU()
+class DeviceAwareModule(nn.Module):
+    @property
+    def device(self):
+        return next(self.parameters()).device
+
+
+class Conv2d_tf(nn.Conv2d):
+    """
+    Conv2d with the padding behavior from TF
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(Conv2d_tf, self).__init__(*args, **kwargs)
+        self.padding = kwargs.get("padding", "SAME")
+
+    def _compute_padding(self, input, dim):
+        input_size = input.size(dim + 2)
+        filter_size = self.weight.size(dim + 2)
+        effective_filter_size = (filter_size - 1) * self.dilation[dim] + 1
+        out_size = (input_size + self.stride[dim] - 1) // self.stride[dim]
+        total_padding = max(
+            0, (out_size - 1) * self.stride[dim] + effective_filter_size - input_size
         )
-        self.output_dim = 512
-        self.apply(orthogonal_init)
+        additional_padding = int(total_padding % 2 != 0)
 
-    def forward(self, x):
-        x = self.layers(x)
-        return x
+        return additional_padding, total_padding
 
+    def forward(self, input):
+        if self.padding == "VALID":
+            return F.conv2d(
+                input,
+                self.weight,
+                self.bias,
+                self.stride,
+                padding=0,
+                dilation=self.dilation,
+                groups=self.groups,
+            )
+        rows_odd, padding_rows = self._compute_padding(input, dim=0)
+        cols_odd, padding_cols = self._compute_padding(input, dim=1)
+        if rows_odd or cols_odd:
+            input = F.pad(input, [0, cols_odd, 0, rows_odd])
 
-class ResidualBlock(nn.Module):
-    def __init__(self, in_channels):
-        super().__init__()
-        self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=in_channels, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(in_channels=in_channels, out_channels=in_channels, kernel_size=3, stride=1, padding=1)
-
-    def forward(self, x):
-        out = nn.ReLU()(x)
-        out = self.conv1(out)
-        out = nn.ReLU()(out)
-        out = self.conv2(out)
-        return out + x
-
-
-class ImpalaBlock(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super().__init__()
-        self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1)
-        self.res1 = ResidualBlock(out_channels)
-        self.res2 = ResidualBlock(out_channels)
-
-    def forward(self, x):
-        x = self.conv(x)
-        x = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)(x)
-        x = self.res1(x)
-        x = self.res2(x)
-        return x
+        return F.conv2d(
+            input,
+            self.weight,
+            self.bias,
+            self.stride,
+            padding=(padding_rows // 2, padding_cols // 2),
+            dilation=self.dilation,
+            groups=self.groups,
+        )
 
 
-class ImpalaModel(nn.Module):
-    def __init__(self, in_channels):
-        super().__init__()
-        self.block1 = ImpalaBlock(in_channels=in_channels, out_channels=16)
-        self.block2 = ImpalaBlock(in_channels=16, out_channels=32)
-        self.block3 = ImpalaBlock(in_channels=32, out_channels=32)
-        self.fc = nn.Linear(in_features=32 * 8 * 8, out_features=256)
+class NNBase(nn.Module):
+    """
+    Actor-Critic network (base class)
+    """
 
-        self.output_dim = 256
-        self.apply(xavier_uniform_init)
+    def __init__(self, recurrent, recurrent_input_size, hidden_size):
+        super(NNBase, self).__init__()
 
-    def forward(self, x):
-        x = self.block1(x)
-        x = self.block2(x)
-        x = self.block3(x)
-        x = nn.ReLU()(x)
-        x = Flatten()(x)
-        x = self.fc(x)
-        x = nn.ReLU()(x)
-        return x
+        self._hidden_size = hidden_size
+        self._recurrent = recurrent
 
+        if recurrent:
+            self.gru = nn.GRU(recurrent_input_size, hidden_size)
+            for name, param in self.gru.named_parameters():
+                if 'bias' in name:
+                    nn.init.constant_(param, 0)
+                elif 'weight' in name:
+                    nn.init.orthogonal_(param)
 
-class GRU(nn.Module):
-    def __init__(self, input_size, hidden_size):
-        super().__init__()
-        self.gru = orthogonal_init(nn.GRU(input_size, hidden_size), gain=1.0)
+    @property
+    def is_recurrent(self):
+        return self._recurrent
 
-    def forward(self, x, hxs, masks):
-        # Prediction
+    @property
+    def recurrent_hidden_state_size(self):
+        if self._recurrent:
+            return self._hidden_size
+        return 1
+
+    @property
+    def output_size(self):
+        return self._hidden_size
+
+    def _forward_gru(self, x, hxs, masks):
         if x.size(0) == hxs.size(0):
-            # input for GRU-CELL: (L=sequence_length, N, H)
-            # output for GRU-CELL: (output: (L, N, H), hidden: (L, N, H))
-            masks = masks.unsqueeze(-1)
             x, hxs = self.gru(x.unsqueeze(0), (hxs * masks).unsqueeze(0))
             x = x.squeeze(0)
             hxs = hxs.squeeze(0)
-        # Training
-        # We will recompute the hidden state to allow the gradient to be back-propagated through time
         else:
             # x is a (T, N, -1) tensor that has been flatten to (T * N, -1)
             N = hxs.size(0)
             T = int(x.size(0) / N)
 
+            # unflatten
             x = x.view(T, N, x.size(1))
 
-            # Same deal with the masks
+            # Same deal with masks
             masks = masks.view(T, N)
 
             # Let's figure out which steps in the sequence have a zero for any agent
             # We will always assume t=0 has a zero in it as that makes the logic cleaner
-            # (can be interpreted as a truncated back-propagation through time)
-            has_zeros = ((masks[1:] == 0.0).any(dim=-1)
+            has_zeros = ((masks[1:] == 0.0)
+                         .any(dim=-1)
                          .nonzero()
                          .squeeze()
                          .cpu())
@@ -144,3 +182,160 @@ class GRU(nn.Module):
             hxs = hxs.squeeze(0)
 
         return x, hxs
+
+
+class MLPBase(NNBase):
+    """
+    Multi-Layer Perceptron
+    """
+
+    def __init__(self, num_inputs, recurrent=False, hidden_size=64):
+        super(MLPBase, self).__init__(recurrent, num_inputs, hidden_size)
+
+        if recurrent:
+            num_inputs = hidden_size
+
+        self.actor = nn.Sequential(
+            init_tanh_(nn.Linear(num_inputs, hidden_size)), nn.Tanh(),
+            init_tanh_(nn.Linear(hidden_size, hidden_size)), nn.Tanh())
+
+        self.critic = nn.Sequential(
+            init_tanh_(nn.Linear(num_inputs, hidden_size)), nn.Tanh(),
+            init_tanh_(nn.Linear(hidden_size, hidden_size)), nn.Tanh())
+
+        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+
+        self.train()
+
+    def forward(self, inputs, rnn_hxs, masks):
+        x = inputs
+
+        if self.is_recurrent:
+            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+
+        hidden_critic = self.critic(x)
+        hidden_actor = self.actor(x)
+
+        return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs
+
+
+class BasicBlock(nn.Module):
+    """
+    Residual Network Block
+    """
+
+    def __init__(self, n_channels, stride=1):
+        super(BasicBlock, self).__init__()
+
+        self.conv1 = Conv2d_tf(n_channels, n_channels, kernel_size=3, stride=1, padding=(1, 1))
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = Conv2d_tf(n_channels, n_channels, kernel_size=3, stride=1, padding=(1, 1))
+        self.stride = stride
+
+        apply_init_(self.modules())
+
+        self.train()
+
+    def forward(self, x):
+        identity = x
+
+        out = self.relu(x)
+        out = self.conv1(out)
+        out = self.relu(out)
+        out = self.conv2(out)
+
+        out += identity
+        return out
+
+
+class ResNetBase(NNBase):
+    """
+    Residual Network
+    """
+
+    def __init__(self, num_inputs, input_h=64, input_w=64, recurrent=False, hidden_size=256, channels=[16, 32, 32]):
+        super(ResNetBase, self).__init__(recurrent, num_inputs, hidden_size)
+
+        self.layer1 = self._make_layer(num_inputs, channels[0])
+        self.layer2 = self._make_layer(channels[0], channels[1])
+        self.layer3 = self._make_layer(channels[1], channels[2])
+
+        self.flatten = Flatten()
+        self.relu = nn.ReLU()
+
+        output_h = np.ceil(np.ceil(np.ceil(input_h / 2) / 2) / 2)
+        output_w = np.ceil(np.ceil(np.ceil(input_w / 2) / 2) / 2)
+
+        fc_in_dim = int(output_h * output_w * 32)
+
+        self.fc = init_relu_(nn.Linear(fc_in_dim, hidden_size))
+        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+
+        apply_init_(self.modules())
+
+        self.train()
+
+    def _make_layer(self, in_channels, out_channels, stride=1):
+        layers = []
+
+        layers.append(Conv2d_tf(in_channels, out_channels, kernel_size=3, stride=1))
+        layers.append(nn.MaxPool2d(kernel_size=3, stride=2, padding=1))
+
+        layers.append(BasicBlock(out_channels))
+        layers.append(BasicBlock(out_channels))
+
+        return nn.Sequential(*layers)
+
+    def forward(self, inputs, rnn_hxs, masks):
+        x = inputs
+
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+
+        x = self.relu(self.flatten(x))
+        x = self.relu(self.fc(x))
+
+        if self.is_recurrent:
+            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+
+        return self.critic_linear(x), x, rnn_hxs
+
+
+class SmallNetBase(NNBase):
+    """
+    Residual Network
+    """
+
+    def __init__(self, num_inputs, input_h=64, input_w=64, recurrent=False, hidden_size=256):
+        super(SmallNetBase, self).__init__(recurrent, num_inputs, hidden_size)
+
+        self.conv1 = Conv2d_tf(3, 16, kernel_size=8, stride=4)
+        self.conv2 = Conv2d_tf(16, 32, kernel_size=4, stride=2)
+
+        self.flatten = Flatten()
+        self.relu = nn.ReLU()
+
+        fc_in_dim = int(np.ceil(np.ceil(input_h / 4) / 2) * np.ceil(np.ceil(input_w / 4) / 2) * 32)
+
+        self.fc = init_relu_(nn.Linear(fc_in_dim, hidden_size))
+        self.critic_linear = init_(nn.Linear(hidden_size, 1))
+
+        apply_init_(self.modules())
+
+        self.train()
+
+    def forward(self, inputs, rnn_hxs, masks):
+        x = inputs
+
+        x = self.relu(self.conv1(x))
+        x = self.relu(self.conv2(x))
+        x = self.flatten(x)
+        x = self.relu(self.fc(x))
+
+        if self.is_recurrent:
+            x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
+
+        return self.critic_linear(x), x, rnn_hxs
+
+

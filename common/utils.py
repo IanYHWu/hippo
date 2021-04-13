@@ -13,6 +13,12 @@ def set_global_seeds(seed):
     torch.cuda.manual_seed_all(seed)
 
 
+def init(module, weight_init, bias_init, gain=1):
+    weight_init(module.weight.data, gain=gain)
+    bias_init(module.bias.data)
+    return module
+
+
 def orthogonal_init(module, gain=nn.init.calculate_gain('relu')):
     if isinstance(module, nn.Linear) or isinstance(module, nn.Conv2d):
         nn.init.orthogonal_(module.weight.data, gain)

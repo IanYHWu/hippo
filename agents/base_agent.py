@@ -10,8 +10,7 @@ class BaseAgent(object):
                  actor_critic,
                  logger,
                  storage,
-                 device,
-                 num_checkpoints):
+                 device):
         """
         env: (gym.Env) environment following the openAI Gym API
         """
@@ -20,7 +19,6 @@ class BaseAgent(object):
         self.logger = logger
         self.storage = storage
         self.device = device
-        self.num_checkpoints = num_checkpoints
 
         self.t = 0
 
@@ -47,4 +45,3 @@ class BaseAgent(object):
         Evaluate the agent
         """
         pass
-

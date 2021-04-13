@@ -1,9 +1,7 @@
 from agents.base_agent import BaseAgent
-from common.utils import adjust_lr
 import torch
 import torch.optim as optim
 import numpy as np
-import time
 
 
 class PPO(BaseAgent):
@@ -13,41 +11,30 @@ class PPO(BaseAgent):
                  logger,
                  storage,
                  device,
-                 n_checkpoints=10,
                  n_steps=128,
                  n_envs=8,
                  epoch=3,
                  mini_batch_per_epoch=8,
                  mini_batch_size=32*8,
-                 gamma=0.99,
-                 lmbda=0.95,
                  learning_rate=2.5e-4,
                  grad_clip_norm=0.5,
                  eps_clip=0.2,
                  value_coef=0.5,
-                 entropy_coef=0.01,
-                 normalise_adv=True,
-                 normalise_reward=True,
-                 use_gae=True):
+                 entropy_coef=0.01):
 
-        super().__init__(env, actor_critic, logger, storage, device, n_checkpoints)
+        super().__init__(env, actor_critic, logger, storage, device)
 
         self.n_steps = n_steps
         self.n_envs = n_envs
         self.epoch = epoch
         self.mini_batch_per_epoch = mini_batch_per_epoch
         self.mini_batch_size = mini_batch_size
-        self.gamma = gamma
-        self.lmbda = lmbda
         self.learning_rate = learning_rate
         self.optimizer = optim.Adam(self.actor_critic.parameters(), lr=learning_rate, eps=1e-5)
         self.grad_clip_norm = grad_clip_norm
         self.eps_clip = eps_clip
         self.value_coef = value_coef
         self.entropy_coef = entropy_coef
-        self.normalise_adv = normalise_adv
-        self.normalise_rew = normalise_reward
-        self.use_gae = use_gae
 
     def predict(self, obs, hidden_state, done):
         with torch.no_grad():
@@ -111,64 +98,17 @@ class PPO(BaseAgent):
                    'Loss/entropy': np.mean(entropy_loss_list)}
         return summary
 
-    def train(self, num_timesteps):
-        save_every = num_timesteps // self.num_checkpoints
-        checkpoint_count = 0
-        obs = self.env.reset()
-        hidden_state = np.zeros((self.n_envs, self.storage.hidden_state_size))
-        done = np.zeros(self.n_envs)
-        start_ = time.time()
-        print("Now training...")
-
-        while self.t < num_timesteps:
-            # Run actor_critic
-            self.actor_critic.eval()
-            for _ in range(self.n_steps):
-                act, log_prob_act, value, next_hidden_state = self.predict(obs, hidden_state, done)
-                next_obs, rew, done, info = self.env.step(act)
-                self.storage.store(obs, hidden_state, act, rew, done, info, log_prob_act, value)
-                obs = next_obs
-                hidden_state = next_hidden_state
-            _, _, last_val, hidden_state = self.predict(obs, hidden_state, done)
-            self.storage.store_last(obs, hidden_state, last_val)
-            # Compute advantage estimates
-            self.storage.compute_estimates(self.gamma, self.lmbda, self.use_gae, self.normalise_adv)
-
-            # Optimize actor_critic & values
-            summary = self.optimize()
-            # Log the training-procedure
-            self.t += self.n_steps * self.n_envs
-            rew_batch, done_batch = self.storage.fetch_log_data()
-            self.logger.feed(rew_batch, done_batch)
-            self.logger.write_summary(summary)
-            self.logger.dump()
-            self.optimizer = adjust_lr(self.optimizer, self.learning_rate, self.t, num_timesteps)
-            # Save the model
-            if self.t > ((checkpoint_count + 1) * save_every):
-                print("Saving checkpoint: t = {}".format(self.t))
-                self.logger.save_model(self.actor_critic)
-                checkpoint_count += 1
-        print("Training complete")
-        print("Wall time: {}".format(time.time() - start_))
-        self.env.close()
-
 
 def get_args_ppo(params):
-    param_dict = {'n_checkpoints': params.n_checkpoints,
-                  'n_steps': params.n_steps,
+    param_dict = {'n_steps': params.n_steps,
                   'n_envs': params.n_envs,
                   'epoch': params.epoch,
                   'mini_batch_per_epoch': params.mini_batch_per_epoch,
                   'mini_batch_size': params.mini_batch_size,
-                  'gamma': params.gamma,
-                  'lmbda': params.lmbda,
                   'learning_rate': params.learning_rate,
                   'grad_clip_norm': params.grad_clip_norm,
                   'eps_clip': params.eps_clip,
                   'value_coef': params.value_coef,
-                  'entropy_coef': params.entropy_coef,
-                  'normalise_adv': params.normalise_adv,
-                  'normalise_reward': params.normalise_reward,
-                  'use_gae': params.use_gae}
+                  'entropy_coef': params.entropy_coef}
 
     return param_dict
