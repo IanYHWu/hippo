@@ -43,7 +43,7 @@ def train(agent, actor_critic, env, rollout, logger, num_timesteps, params):
         logger.feed(rew_batch, done_batch)
         logger.write_summary(summary)
         logger.dump()
-        agent.optimizer = adjust_lr(agent.optimizer, params.learning_rate, t, num_timesteps)
+        # agent.optimizer = adjust_lr(agent.optimizer, params.learning_rate, t, num_timesteps)
         # Save the model
         if t > ((checkpoint_count + 1) * save_every):
             print("Saving checkpoint: t = {}".format(t))
