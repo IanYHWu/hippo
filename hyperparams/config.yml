@@ -16,7 +16,7 @@ easy:
     normalise_reward: True
     use_gae: True
     algo: ppo
-    architecture: Small
+    architecture: ResNet
     recurrent: False
     hidden_size: 256
 
@@ -38,6 +38,6 @@ tiny:
     normalise_reward: True
     use_gae: True
     algo: ppo
-    architecture: small
+    architecture: ResNet
     recurrent: False
     hidden_size: 256
