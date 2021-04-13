@@ -14,7 +14,7 @@ def load_env(args, params):
     normalize_rew = params.normalise_reward
     env = VecExtractDictObs(env, "rgb")
     if normalize_rew:
-        env = VecNormalize(env, ob=False)  # normalizing returns, but not the img frames.
+        env = VecNormalize(env, ob=False)  # normalizing returns, but not the image frames.
     env = TransposeFrame(env)
     env = ScaledFloatFrame(env)
 
