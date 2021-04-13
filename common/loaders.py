@@ -23,24 +23,28 @@ def load_env(args, params):
 
 def load_model(params, env, device):
     observation_shape = env.observation_space.shape
+    action_size = env.action_space.n
     architecture = params.architecture
     recurrent = params.recurrent
 
     # Model architecture
     if len(observation_shape) == 3:
         if architecture == 'Small':
+            print('Using SmallNet Base')
             base = SmallNetBase(observation_shape[0], input_h=observation_shape[1],
                                 input_w=observation_shape[2], recurrent=recurrent, hidden_size=params.hidden_size)
         else:
+            print('Using ResNet Base')
             base = ResNetBase(observation_shape[0], input_h=observation_shape[1],
                               input_w=observation_shape[2], recurrent=recurrent, hidden_size=params.hidden_size)
     elif len(observation_shape) == 1:
+        print('Using MLP Base')
         base = MLPBase(observation_shape, recurrent=recurrent, hidden_size=params.hidden_size)
     else:
         raise NotImplementedError
 
     # Discrete action space
-    actor_critic = CategoricalAC(base, recurrent)
+    actor_critic = CategoricalAC(base, recurrent, action_size)
     actor_critic.to(device)
 
     return actor_critic
