@@ -11,7 +11,7 @@ parser.add_argument(
     '--name', type=str, required=True, help='Experiment name'
 )
 parser.add_argument(
-    '--load_checkpoint', type=bool, default=False, help='Continue training from a checkpoint'
+    '--load_checkpoint', action='store_true', help='Continue training from a checkpoint'
 )
 parser.add_argument(
     '--log_dir', type=str, default='..', help='Logging directory'
@@ -46,3 +46,20 @@ parser.add_argument(
 parser.add_argument(
     '--num_checkpoints', type=int, default=int(1), help='Number of checkpoints to store'
 )
+parser.add_argument(
+    '--add_timesteps', type=int, default=int(0), help='Additional timesteps to train - used for checkpoint training'
+)
+
+# wandb args
+parser.add_argument(
+    '--wandb', action='store_true', help='Log results on wandb'
+)
+parser.add_argument(
+    '--wandb_project_name', type=str, default='msc_2021', help='Project name for wandb'
+)
+parser.add_argument(
+    '--wandb_name', type=str, default='test_run', help='Run name for wandb'
+)
+
+
+
