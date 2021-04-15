@@ -11,7 +11,7 @@ from common.data_logging import Logger
 from common.storage import Storage
 
 
-def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params):
+def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params, controller=None):
     save_every = num_timesteps // params.n_checkpoints
     checkpoint_count = 0
     obs = env.reset()
@@ -20,8 +20,12 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
     start_ = time.time()
     print("Now training...")
 
+    # if hot start...
+
     while curr_timestep < num_timesteps:
-        # Run actor_critic
+
+        # if controller is None or if not controller.query():
+
         actor_critic.eval()
         for step in range(params.n_steps):
             act, log_prob_act, value, next_hidden_state = agent.predict(obs, hidden_state, done)
@@ -45,6 +49,15 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
             print("Saving checkpoint: t = {}".format(curr_timestep))
             logger.save_checkpoint(actor_critic, curr_timestep)
             checkpoint_count += 1
+
+        # else:
+        #   # gather trajectory from demo
+        #   # store trajectory in DemoReplayBuffer
+
+        # if controller and controller.learn_from_demo():
+        #   sample minibatch from DemoReplayBuffer
+        #   agent.demo_optimize()
+
     print("Training complete, saving final checkpoint")
     logger.save_checkpoint(actor_critic, curr_timestep)
     print("Wall time: {}".format(time.time() - start_))
@@ -97,7 +110,7 @@ def main(args):
     rollout = Storage(observation_shape, params.hidden_size, params.n_steps, params.n_envs, device)
 
     print("Initialising agent...")
-    agent = load_agent(env, actor_critic, logger, rollout, device, params)
+    agent = load_agent(env, actor_critic, rollout, device, params)
     train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params)
 
 
