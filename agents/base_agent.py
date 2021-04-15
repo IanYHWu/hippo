@@ -8,7 +8,6 @@ class BaseAgent(object):
     def __init__(self,
                  env,
                  actor_critic,
-                 logger,
                  storage,
                  device):
         """
@@ -16,7 +15,6 @@ class BaseAgent(object):
         """
         self.env = env
         self.actor_critic = actor_critic
-        self.logger = logger
         self.storage = storage
         self.device = device
 
@@ -28,20 +26,9 @@ class BaseAgent(object):
         """
         pass
 
-    def update_policy(self):
+    def optimize(self):
         """
         Train the neural network model
         """
         pass
 
-    def train(self, num_timesteps):
-        """
-        Train the agent with the collected trajectories
-        """
-        pass
-
-    def evaluate(self):
-        """
-        Evaluate the agent
-        """
-        pass
