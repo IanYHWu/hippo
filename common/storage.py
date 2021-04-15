@@ -240,7 +240,7 @@ class DemoReplayBuffer:
         new_buffer = torch.cat((trajectory.unsqueeze(0), buffer), dim=0)
         return new_buffer
 
-    def fetch_demo_mini_batch(self, mini_batch_size, sample_method='uniform', recurrent=False):
+    def fetch_demo_generator(self, mini_batch_size, sample_method='uniform', recurrent=False):
         buffer_size = self.max_len * len(self.obs_store)
         if not recurrent:
             if sample_method == 'uniform':
@@ -253,13 +253,15 @@ class DemoReplayBuffer:
                     act_batch = torch.FloatTensor(self.act_store.float()).reshape(-1)[indices].to(self.device)
                     mask_batch = torch.FloatTensor(self.mask_store.float()).reshape(-1)[indices].to(self.device)
                     returns_batch = torch.FloatTensor(self.returns_store.float()).reshape(-1)[indices].to(self.device)
-                    print(act_batch)
                     yield obs_batch, hidden_state_batch, act_batch, mask_batch, returns_batch
             else:
                 raise NotImplementedError
 
         else:
             raise NotImplementedError
+
+    def get_buffer_capacity(self):
+        return len(self.obs_store) * self.max_len
 
 
 if __name__ == '__main__':
@@ -288,9 +290,10 @@ if __name__ == '__main__':
 
         rb.store(ds.obs_store, ds.hidden_states_store, ds.act_store, ds.returns_store, ds.trajectory_length)
 
-    generator = rb.fetch_demo_mini_batch(mini_batch_size=4, sample_method='uniform', recurrent=False)
+    generator = rb.fetch_demo_generator(mini_batch_size=3, sample_method='uniform', recurrent=False)
     for sample in generator:
         obs_batch, hidden_state_batch, act_batch, mask_batch, returns_batch = sample
+        print(act_batch)
         # print(obs_batch)
         # print(act_batch)
         # print(hidden_state_batch)
