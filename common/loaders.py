@@ -50,11 +50,11 @@ def load_model(params, env, device):
     return actor_critic
 
 
-def load_agent(env, actor_critic, logger, storage, device, params):
+def load_agent(env, actor_critic, storage, device, params):
 
     if params.algo == "ppo":
         params_dict = get_args_ppo(params)
-        agent = PPO(env, actor_critic, logger, storage, device, **params_dict)
+        agent = PPO(env, actor_critic, storage, device, **params_dict)
     else:
         raise NotImplementedError
 
