@@ -5,10 +5,10 @@ import numpy as np
 
 
 class PPO(BaseAgent):
+
     def __init__(self,
                  env,
                  actor_critic,
-                 logger,
                  storage,
                  device,
                  n_steps=128,
@@ -22,7 +22,7 @@ class PPO(BaseAgent):
                  value_coef=0.5,
                  entropy_coef=0.01):
 
-        super().__init__(env, actor_critic, logger, storage, device)
+        super().__init__(env, actor_critic, storage, device)
 
         self.n_steps = n_steps
         self.n_envs = n_envs
@@ -96,6 +96,7 @@ class PPO(BaseAgent):
         summary = {'Loss/pi': np.mean(pi_loss_list),
                    'Loss/v': np.mean(value_loss_list),
                    'Loss/entropy': np.mean(entropy_loss_list)}
+
         return summary
 
 
