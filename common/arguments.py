@@ -3,7 +3,6 @@ Arguments for Argparse
 """
 
 import argparse
-import random
 
 parser = argparse.ArgumentParser()
 
@@ -59,6 +58,11 @@ parser.add_argument(
 )
 parser.add_argument(
     '--wandb_name', type=str, default='test_run', help='Run name for wandb'
+)
+
+# ppo_demo args
+parser.add_argument(
+    '--oracle_path', type=str, default='', help='Path to synthetic oracle'
 )
 
 
