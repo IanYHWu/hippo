@@ -182,7 +182,14 @@ class DemoReplayBuffer:
         self.max_len = 0
         self.device = device
 
-    def store(self, obs, hidden_states, actions, returns, trajectory_len):
+    def store(self, demo_store):
+
+        obs = demo_store.obs_store
+        hidden_states = demo_store.hidden_states_store
+        actions = demo_store.act_store
+        returns = demo_store.returns_store
+        trajectory_len = demo_store.trajectory_length
+
         mask = torch.ones(trajectory_len)
 
         if self.max_len == 0:
@@ -288,7 +295,7 @@ if __name__ == '__main__':
         ds.stores_to_tensors()
         ds.compute_returns()
 
-        rb.store(ds.obs_store, ds.hidden_states_store, ds.act_store, ds.returns_store, ds.trajectory_length)
+        rb.store(ds)
 
     generator = rb.fetch_demo_generator(mini_batch_size=3, sample_method='uniform', recurrent=False)
     for sample in generator:
