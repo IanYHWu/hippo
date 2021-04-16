@@ -3,9 +3,10 @@ import torch
 
 class Oracle:
 
-    def __init__(self, oracle, device):
-        self.oracle = oracle
+    def __init__(self, path, device):
         self.device = device
+        self.path = path
+        self.oracle = None
 
     def predict(self, obs, hidden_state, done):
         with torch.no_grad():
@@ -17,3 +18,7 @@ class Oracle:
 
         return act.cpu().numpy(), hidden_state.cpu().numpy()
 
+    def load_oracle(self, model):
+        checkpoint = torch.load(self.path)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        self.oracle = model
