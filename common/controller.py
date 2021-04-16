@@ -39,6 +39,9 @@ class DemoScheduler:
         else:
             return False
 
+    def get_stats(self):
+        return self.query_count, self.demo_learn_count
+
 
 
 
