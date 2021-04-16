@@ -164,3 +164,4 @@ def load_args(root_path):
         args.__dict__ = json.load(f)
 
     return args
+
