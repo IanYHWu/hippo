@@ -51,7 +51,7 @@ easy_demo:
     mini_batch_size: 2048
     gamma: 0.999
     lmbda: 0.95
-    learning_rate: 0.0005
+    learning_rate: 0.0001
     grad_clip_norm: 0.5
     eps_clip: 0.2
     value_coef: 0.5
@@ -63,16 +63,16 @@ easy_demo:
     architecture: ResNet
     recurrent: False
     hidden_size: 256
-    demo_coef: 0.5
-    demo_learning_rate: 0.0005
+    demo_coef: 0.01
+    demo_learning_rate: 0.0001
     demo_batch_size: 512
-    demo_mini_batch_size: 64
-    demo_epochs: 3
-    hot_start: 5
-    buffer_max_samples: 100
-    num_demos: 1000
+    demo_mini_batch_size: 512
+    demo_epochs: 10
+    hot_start: 20
+    buffer_max_samples: 250
+    num_demos: 500
     demo_schedule: linear
-    demo_learn_ratio: 0.2
+    demo_learn_ratio: 0.1
 
 tiny_demo:
     n_envs: 2
