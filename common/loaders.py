@@ -14,6 +14,7 @@ def load_env(args, params, demo=False, demo_level_seed=None):
                          num_levels=args.num_levels,
                          distribution_mode=args.distribution_mode)
     else:
+        demo_level_seed = np.array([demo_level_seed], dtype='int32')
         assert demo_level_seed is not None
         env = ProcgenEnv(num_envs=1,
                          env_name=args.env_name,
