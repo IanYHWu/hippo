@@ -1,6 +1,8 @@
 import torch
 import numpy as np
 import time
+import random
+import matplotlib.pyplot as plt
 
 from common.data_logging import ParamLoader
 from common.data_logging import load_args
@@ -24,22 +26,32 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
     hidden_state = np.zeros((params.n_envs, rollout.hidden_state_size))
     done = np.zeros(params.n_envs)
     start_ = time.time()
+    demo_sum_rewards = []
 
     if params.algo == 'ppo_demo':
         demo = True
-        assert controller is not None
-        assert demo_rollout is not None
-        assert demonstrator is not None
-        assert demo_buffer is not None
         print("Using Agent - PPO Demo")
         if params.hot_start:
-            pass
+            print("Hot Start - {} Demonstrations".format(params.hot_start))
+            for i in range(0, params.hot_start):
+                demo_level_seed = random.randint(0, int(100000))
+                demo_env = load_env(args, params, demo=True, demo_level_seed=demo_level_seed)
+                demo_obs = demo_env.reset()
+                demo_hidden_state = np.zeros((1, rollout.hidden_state_size))
+                demo_done = np.zeros(1)
+                while demo_done[0] == 0:
+                    demo_act, demo_next_hidden_state = demonstrator.predict(demo_obs, demo_hidden_state, demo_done)
+                    demo_next_obs, demo_rew, demo_done, demo_info = demo_env.step(demo_act)
+                    demo_rollout.store(demo_obs, demo_hidden_state, demo_act, demo_rew)
+                    demo_obs = demo_next_obs
+                    demo_hidden_state = demo_next_hidden_state
+                demo_rollout.compute_returns()
+                demo_buffer.store(demo_rollout)
     else:
         demo = False
         print("Using Agent - Vanilla PPO")
 
     print("Now training...")
-
     while curr_timestep < num_timesteps:
         actor_critic.eval()
         for step in range(params.n_steps):
@@ -57,16 +69,18 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
         if demo and controller.query_demonstrator(curr_timestep):
             demo_level_seed = info[0]["level_seed"]
             demo_env = load_env(args, params, demo=True, demo_level_seed=demo_level_seed)
-            demo_obs = env.reset()
+            demo_obs = demo_env.reset()
             demo_hidden_state = np.zeros((1, rollout.hidden_state_size))
             demo_done = np.zeros(1)
             while demo_done[0] == 0:
-                demo_act, demo_next_hidden_state = demonstrator.predict(obs, hidden_state, done)
+                demo_act, demo_next_hidden_state = demonstrator.predict(demo_obs, demo_hidden_state, demo_done)
                 demo_next_obs, demo_rew, demo_done, demo_info = demo_env.step(demo_act)
                 demo_rollout.store(demo_obs, demo_hidden_state, demo_act, demo_rew)
                 demo_obs = demo_next_obs
                 demo_hidden_state = demo_next_hidden_state
             demo_rollout.compute_returns()
+            demo_sum_reward = demo_rollout.get_sum_rewards()
+            demo_sum_rewards.append(demo_sum_reward)
             demo_buffer.store(demo_rollout)
 
         if demo and controller.learn_from_demos(curr_timestep):
@@ -84,8 +98,9 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
             checkpoint_count += 1
             if demo:
                 demo_queries, demo_learning_count = controller.get_stats()
-                print("Demonstration Statistics: {} queries, {} demo learning steps".format(
-                    demo_queries, demo_learning_count))
+                print("Demonstration Statistics: {} queries, {} demo learning steps".
+                    format(demo_queries, demo_learning_count))
+                print("Average demonstration trajectory summed reward {}".format(np.mean(demo_sum_rewards)))
 
     print("Training complete, saving final checkpoint")
     logger.save_checkpoint(actor_critic, curr_timestep)
@@ -141,12 +156,13 @@ def main(args):
     if params.algo == 'ppo_demo':
         print("Initialising demonstration storage and buffer...")
         demo_rollout = DemoStorage(device)
-        demo_buffer = DemoReplayBuffer(observation_shape, params.hidden_size, device)
+        demo_buffer = DemoReplayBuffer(observation_shape, params.hidden_size, device,
+                                       max_samples=params.buffer_max_samples)
         print("Initialising controller...")
         controller = DemoScheduler(args, params)
         print("Initialising demonstrator...")
         demo_model = load_model(params, env, device)
-        demonstrator = Oracle.load_oracle(args.oracle_path, demo_model)
+        demonstrator = Oracle(args.oracle_path, demo_model, device)
         print("Initialising agent...")
         agent = load_agent(env, actor_critic, rollout, device, params, demo_buffer=demo_buffer)
         train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params,
