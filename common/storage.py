@@ -159,13 +159,14 @@ class DemoStorage:
         big_tensor = torch.stack(list_of_tensors)
         return big_tensor
 
-    def stores_to_tensors(self):
+    def _stores_to_tensors(self):
         self.obs_store = self._list_to_tensor(self.obs_store)
         self.hidden_states_store = self._list_to_tensor(self.hidden_states_store)
         self.act_store = self._list_to_tensor(self.act_store)
         self.rew_store = self._list_to_tensor(self.rew_store)
 
     def compute_returns(self, gamma=0.99):
+        self._stores_to_tensors()
         self.returns_store = torch.zeros(self.trajectory_length)
         G = 0
         for i in reversed(range(self.trajectory_length)):
@@ -173,24 +174,28 @@ class DemoStorage:
             G = rew + gamma * G
             self.returns_store[i] = G
 
+    def get_sum_rewards(self):
+        return torch.sum(self.rew_store)
+
 
 class DemoReplayBuffer:
 
-    def __init__(self, obs_size, hidden_state_size, device):
+    def __init__(self, obs_size, hidden_state_size, device, max_samples):
         self.obs_size = obs_size
         self.hidden_state_size = hidden_state_size
         self.max_len = 0
         self.device = device
+        self.max_samples = max_samples
 
     def store(self, demo_store):
-
         obs = demo_store.obs_store
         hidden_states = demo_store.hidden_states_store
         actions = demo_store.act_store
-        returns = demo_store.returns_store
         trajectory_len = demo_store.trajectory_length
+        returns = demo_store.returns_store.reshape(trajectory_len, 1)
+        demo_store.reset()
 
-        mask = torch.ones(trajectory_len)
+        mask = torch.ones(trajectory_len).reshape(trajectory_len, 1)
 
         if self.max_len == 0:
             self.obs_store = obs.unsqueeze(0)
@@ -208,18 +213,26 @@ class DemoReplayBuffer:
                 mask = self._pad_tensor(mask, self.max_len, pad_trajectory=True)
 
             elif trajectory_len > self.max_len:
-                self.obs_store = self._pad_tensor(self.obs_store, self.max_len, pad_trajectory=False)
-                self.hidden_states_store = self._pad_tensor(self.hidden_states_store, self.max_len, pad_trajectory=False)
-                self.act_store = self._pad_tensor(self.act_store, self.max_len, pad_trajectory=False)
-                self.returns_store = self._pad_tensor(self.returns_store, self.max_len, pad_trajectory=False)
-                self.mask_store = self._pad_tensor(self.mask_store, self.max_len, pad_trajectory=False)
+                self.obs_store = self._pad_tensor(self.obs_store, trajectory_len, pad_trajectory=False)
+                self.hidden_states_store = self._pad_tensor(self.hidden_states_store, trajectory_len, pad_trajectory=False)
+                self.act_store = self._pad_tensor(self.act_store, trajectory_len, pad_trajectory=False)
+                self.returns_store = self._pad_tensor(self.returns_store, trajectory_len, pad_trajectory=False)
+                self.mask_store = self._pad_tensor(self.mask_store, trajectory_len, pad_trajectory=False)
                 self.max_len = trajectory_len
 
-            self._add_to_buffer(obs, self.obs_store)
-            self._add_to_buffer(hidden_states, self.hidden_states_store)
-            self._add_to_buffer(actions, self.act_store)
-            self._add_to_buffer(returns, self.returns_store)
-            self._add_to_buffer(mask, self.mask_store)
+            self.obs_store = self._add_to_buffer(obs, self.obs_store)
+            self.hidden_states_store = self._add_to_buffer(hidden_states, self.hidden_states_store)
+            self.act_store = self._add_to_buffer(actions, self.act_store)
+            self.returns_store = self._add_to_buffer(returns, self.returns_store)
+            self.mask_store = self._add_to_buffer(mask, self.mask_store)
+
+        n_samples = self.get_buffer_n_samples()
+        if n_samples > self.max_samples:
+            self.obs_store = self.obs_store[:-1, :]
+            self.hidden_states_store = self.hidden_states_store[:-1, :]
+            self.act_store = self.act_store[:-1, :]
+            self.returns_store = self.returns_store[:-1, :]
+            self.mask_store = self.mask_store[:-1, :]
 
     @staticmethod
     def _pad_tensor(input_tensor, new_len, pad_trajectory=False):
@@ -247,16 +260,15 @@ class DemoReplayBuffer:
         new_buffer = torch.cat((trajectory.unsqueeze(0), buffer), dim=0)
         return new_buffer
 
-    def fetch_demo_generator(self, mini_batch_size, sample_method='uniform', recurrent=False):
-        buffer_size = self.max_len * len(self.obs_store)
+    def fetch_demo_generator(self, batch_size, mini_batch_size, sample_method='uniform', recurrent=False):
         if not recurrent:
             if sample_method == 'uniform':
-                sampler = BatchSampler(SubsetRandomSampler(range(buffer_size)),
+                sampler = BatchSampler(SubsetRandomSampler(range(batch_size)),
                                        mini_batch_size, drop_last=True)
                 for indices in sampler:
                     obs_batch = torch.FloatTensor(self.obs_store.float()).reshape(-1, *self.obs_size)[indices].to(self.device)
                     hidden_state_batch = torch.FloatTensor(self.hidden_states_store.float()).reshape(
-                        -1, *self.hidden_state_size).to(self.device)
+                        -1, self.hidden_state_size).to(self.device)
                     act_batch = torch.FloatTensor(self.act_store.float()).reshape(-1)[indices].to(self.device)
                     mask_batch = torch.FloatTensor(self.mask_store.float()).reshape(-1)[indices].to(self.device)
                     returns_batch = torch.FloatTensor(self.returns_store.float()).reshape(-1)[indices].to(self.device)
@@ -270,34 +282,54 @@ class DemoReplayBuffer:
     def get_buffer_capacity(self):
         return len(self.obs_store) * self.max_len
 
+    def get_buffer_n_samples(self):
+        return len(self.obs_store)
+
+    def shrink_buffer(self):
+        pass
+
 
 if __name__ == '__main__':
-    rb = DemoReplayBuffer(obs_size=(4, 4), hidden_state_size=(4, 4), device='cpu')
-    for i in range(0, 3):
-        ds = DemoStorage(device='cpu')
-        for j in range(0, 3):
-            act = np.array([np.random.randint(3)], dtype=float)
-            rew = np.array([np.random.randint(10)], dtype=float)
-            obs = np.random.rand(4, 4)
-            obs = obs.astype(float)
-            hidden = np.random.rand(4, 4)
-            hidden = hidden.astype(float)
-            ds.store(obs, hidden, act, rew)
-        for j in range(0, 5):
-            act = np.array([np.random.randint(3)], dtype=float)
-            rew = np.array([np.random.randint(10)], dtype=float)
-            obs = np.random.rand(4, 4)
-            obs = obs.astype(float)
-            hidden = np.random.rand(4, 4)
-            hidden = hidden.astype(float)
-            ds.store(obs, hidden, act, rew)
+    rb = DemoReplayBuffer(obs_size=(4, 4), hidden_state_size=4, device='cpu', max_samples=2)
+    ds = DemoStorage(device='cpu')
+    for j in range(0, 3):
+        act = np.array([np.random.randint(3)], dtype=float)
+        rew = np.array([np.random.randint(10)], dtype=float)
+        obs = np.random.rand(4, 4)
+        obs = obs.astype(float)
+        hidden = np.random.rand(4, 4)
+        hidden = hidden.astype(float)
+        ds.store(obs, hidden, act, rew)
 
-        ds.stores_to_tensors()
-        ds.compute_returns()
+    ds.compute_returns()
+    rb.store(ds)
+    print(rb.act_store)
+    for j in range(0, 5):
+        act = np.array([np.random.randint(3)], dtype=float)
+        rew = np.array([np.random.randint(10)], dtype=float)
+        obs = np.random.rand(4, 4)
+        obs = obs.astype(float)
+        hidden = np.random.rand(4, 4)
+        hidden = hidden.astype(float)
+        ds.store(obs, hidden, act, rew)
 
-        rb.store(ds)
+    ds.compute_returns()
+    rb.store(ds)
+    print(rb.act_store)
+    for j in range(0, 2):
+        act = np.array([np.random.randint(3)], dtype=float)
+        rew = np.array([np.random.randint(10)], dtype=float)
+        obs = np.random.rand(4, 4)
+        obs = obs.astype(float)
+        hidden = np.random.rand(4, 4)
+        hidden = hidden.astype(float)
+        ds.store(obs, hidden, act, rew)
+    ds.compute_returns()
+    rb.store(ds)
+    print("final store:")
+    print(rb.act_store)
 
-    generator = rb.fetch_demo_generator(mini_batch_size=3, sample_method='uniform', recurrent=False)
+    generator = rb.fetch_demo_generator(batch_size=6, mini_batch_size=3, sample_method='uniform', recurrent=False)
     for sample in generator:
         obs_batch, hidden_state_batch, act_batch, mask_batch, returns_batch = sample
         print(act_batch)
