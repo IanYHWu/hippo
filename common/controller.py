@@ -27,6 +27,7 @@ class DemoScheduler:
             return False
         else:
             if curr_timestep > ((self.demo_learn_count + 1) * learn_every):
+                self.demo_learn_count += 1
                 return True
             else:
                 return False
@@ -35,6 +36,7 @@ class DemoScheduler:
         demo_every = self.num_timesteps // self.num_demos
         if curr_timestep > ((self.query_count + 1) * demo_every):
             self.buffer_empty = False
+            self.query_count += 1
             return True
         else:
             return False
