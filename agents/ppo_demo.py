@@ -109,6 +109,6 @@ def get_args_ppo_demo(params):
                   'demo_mini_batch_size': params.demo_mini_batch_size,
                   'demo_coef': params.demo_coef,
                   'demo_epochs': params.demo_epochs,
-                  'demo_batch_size': params.batch_size}
+                  'demo_batch_size': params.demo_batch_size}
 
     return param_dict
