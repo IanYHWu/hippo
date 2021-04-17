@@ -20,10 +20,11 @@ class PPODemo(PPO):
                  learning_rate=5e-4,
                  grad_clip_norm=0.5,
                  eps_clip=0.2,
-                 value_coef=0.5,
+                 value_coef=0.05,
                  entropy_coef=0.01,
                  demo_learning_rate=5e-4,
-                 demo_mini_batch_size=32*4,
+                 demo_batch_size=512,
+                 demo_mini_batch_size=664,
                  demo_coef=0.5,
                  demo_epochs=3):
 
@@ -47,19 +48,23 @@ class PPODemo(PPO):
         self.demo_coef = demo_coef
         self.demo_mini_batch_size = demo_mini_batch_size
         self.demo_epochs = demo_epochs
+        self.demo_batch_size = demo_batch_size
 
     def demo_optimize(self):
         val_loss_list, pol_loss_list = [], []
         buffer_size = self.demo_buffer.get_buffer_capacity()
-        if buffer_size < self.demo_mini_batch_size:
-            self.demo_mini_batch_size = buffer_size
-        grad_accumulation_steps = buffer_size / self.mini_batch_size
-        grad_accumulation_count = 1
+        batch_size = self.demo_batch_size
+        mini_batch_size = self.demo_mini_batch_size
+        if buffer_size < self.demo_batch_size:
+            batch_size = buffer_size
+        if self.demo_mini_batch_size > self.demo_batch_size:
+            mini_batch_size = batch_size
 
         self.actor_critic.train()
         for e in range(self.demo_epochs):
             recurrent = self.actor_critic.is_recurrent()
-            generator = self.demo_buffer.fetch_demo_generator(mini_batch_size=self.mini_batch_size,
+            generator = self.demo_buffer.fetch_demo_generator(batch_size=batch_size,
+                                                              mini_batch_size=mini_batch_size,
                                                               recurrent=recurrent)
             for sample in generator:
                 obs_batch, hidden_state_batch, act_batch, mask_batch, returns_batch = sample
@@ -77,11 +82,9 @@ class PPODemo(PPO):
                 loss = pol_loss + self.demo_coef * val_loss
                 loss.backward()
 
-                if grad_accumulation_count % grad_accumulation_steps == 0:
-                    torch.nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.grad_clip_norm)
-                    self.demo_optimizer.step()
-                    self.demo_optimizer.zero_grad()
-                grad_accumulation_count += 1
+                torch.nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.grad_clip_norm)
+                self.demo_optimizer.step()
+                self.demo_optimizer.zero_grad()
                 val_loss_list.append(val_loss.item())
                 pol_loss_list.append(pol_loss.item())
 
