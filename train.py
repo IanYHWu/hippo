@@ -83,7 +83,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
             demo_sum_rewards.append(demo_sum_reward)
             demo_buffer.store(demo_rollout)
 
-        if demo and controller.learn_from_demos(curr_timestep):
+        if demo and controller.learn_from_demos(curr_timestep, params.n_envs, params.n_steps, always_learn=False):
             summary = agent.demo_optimize()
 
         curr_timestep += params.n_steps * params.n_envs
