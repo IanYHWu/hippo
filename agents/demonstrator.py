@@ -3,10 +3,12 @@ import torch
 
 class Oracle:
 
-    def __init__(self, path, device):
+    def __init__(self, path, model, device):
         self.device = device
         self.path = path
         self.oracle = None
+
+        self.load_oracle(model)
 
     def predict(self, obs, hidden_state, done):
         with torch.no_grad():
