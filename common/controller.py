@@ -21,8 +21,10 @@ class DemoScheduler:
         else:
             raise NotImplementedError
 
-    def learn_from_demos(self, curr_timestep):
-        learn_every = 1 / self.demo_learn_ratio
+    def learn_from_demos(self, curr_timestep, n_envs, n_steps, always_learn=False):
+        if always_learn:
+            return True
+        learn_every = (1 / self.demo_learn_ratio) * n_envs * n_steps
         if self.buffer_empty:
             return False
         else:
