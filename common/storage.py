@@ -285,9 +285,6 @@ class DemoReplayBuffer:
     def get_buffer_n_samples(self):
         return len(self.obs_store)
 
-    def shrink_buffer(self):
-        pass
-
 
 if __name__ == '__main__':
     rb = DemoReplayBuffer(obs_size=(4, 4), hidden_state_size=4, device='cpu', max_samples=2)
