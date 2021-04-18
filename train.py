@@ -54,6 +54,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
     print("Now training...")
     while curr_timestep < num_timesteps:
         actor_critic.eval()
+        demonstrator.oracle.eval()
         for step in range(params.n_steps):
             act, log_prob_act, value, next_hidden_state = agent.predict(obs, hidden_state, done)
             next_obs, rew, done, info = env.step(act)
@@ -82,6 +83,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
             demo_sum_reward = demo_rollout.get_sum_rewards()
             demo_sum_rewards.append(demo_sum_reward)
             demo_buffer.store(demo_rollout)
+            demo_env.close()
 
         if demo and controller.learn_from_demos(curr_timestep, params.n_envs, params.n_steps, always_learn=False):
             summary = agent.demo_optimize()
@@ -164,7 +166,7 @@ def main(args):
         demo_model = load_model(params, env, device)
         demonstrator = Oracle(args.oracle_path, demo_model, device)
         print("Initialising agent...")
-        agent = load_agent(env, actor_critic, rollout, device, params, demo_buffer=demo_buffer)
+        agent = load_agent(env, actor_critic, rollout, device, params=params, demo_buffer=demo_buffer)
         train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params,
               controller, demo_rollout, demo_buffer, demonstrator)
     else:
