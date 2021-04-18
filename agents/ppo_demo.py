@@ -51,6 +51,7 @@ class PPODemo(PPO):
         self.demo_batch_size = demo_batch_size
 
     def demo_optimize(self):
+        print('Demo Optimising!')
         val_loss_list, pol_loss_list = [], []
         buffer_size = self.demo_buffer.get_buffer_capacity()
         batch_size = self.demo_batch_size
@@ -82,7 +83,7 @@ class PPODemo(PPO):
                 loss = pol_loss + self.demo_coef * val_loss
                 loss.backward()
 
-                # torch.nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.grad_clip_norm)
+                torch.nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.grad_clip_norm)
                 self.demo_optimizer.step()
                 self.demo_optimizer.zero_grad()
                 val_loss_list.append(val_loss.item())
