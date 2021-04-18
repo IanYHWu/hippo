@@ -97,11 +97,11 @@ tiny_demo:
     hidden_size: 256
     demo_coef: 0.5
     demo_learning_rate: 0.0005
-    demo_batch_size: 512
-    demo_mini_batch_size: 64
-    demo_epochs: 3
-    hot_start: 5
+    demo_batch_size: 128
+    demo_mini_batch_size: 128
+    demo_epochs: 10
+    hot_start: 0
     buffer_max_samples: 100
-    num_demos: 10
+    num_demos: 1
     demo_schedule: linear
-    demo_learn_ratio: 0.2
+    demo_learn_ratio: 0.1
