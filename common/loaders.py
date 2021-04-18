@@ -3,7 +3,7 @@ from envs.procgen_wrappers import *
 from common.model import *
 from common.actor_critic import CategoricalAC
 from agents.ppo import PPO, get_args_ppo
-from agents.ppo_demo import PPODemo, get_args_ppo_demo
+from agents.ppo_demo_2 import PPODemo, get_args_ppo_demo
 
 
 def load_env(args, params, demo=False, demo_level_seed=None):
@@ -65,6 +65,7 @@ def load_agent(env, actor_critic, storage, device, params, demo_buffer=None):
         params_dict = get_args_ppo(params)
         agent = PPO(env, actor_critic, storage, device, **params_dict)
     elif params.algo == "ppo_demo":
+        print('**ppo_demo**')
         params_dict = get_args_ppo_demo(params)
         agent = PPODemo(env, actor_critic, storage, demo_buffer, device, **params_dict)
     else:
