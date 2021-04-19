@@ -65,7 +65,6 @@ def load_agent(env, actor_critic, storage, device, params, demo_buffer=None):
         params_dict = get_args_ppo(params)
         agent = PPO(env, actor_critic, storage, device, **params_dict)
     elif params.algo == "ppo_demo":
-        print('**ppo_demo**')
         params_dict = get_args_ppo_demo(params)
         agent = PPODemo(env, actor_critic, storage, demo_buffer, device, **params_dict)
     else:

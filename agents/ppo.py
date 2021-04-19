@@ -48,7 +48,6 @@ class PPO(BaseAgent):
         return act.cpu().numpy(), log_prob_act.cpu().numpy(), value.cpu().numpy(), hidden_state.cpu().numpy()
 
     def optimize(self):
-        print('Optimising!')
         pi_loss_list, value_loss_list, entropy_loss_list = [], [], []
         batch_size = self.n_steps * self.n_envs // self.mini_batch_per_epoch
         if batch_size < self.mini_batch_size:

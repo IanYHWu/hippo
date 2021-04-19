@@ -21,7 +21,7 @@ class Oracle:
         return act.cpu().numpy(), hidden_state.cpu().numpy()
 
     def load_oracle(self, model):
-        #checkpoint = torch.load(self.path, map_location='cpu')
-        checkpoint = torch.load(self.path)
+        checkpoint = torch.load(self.path, map_location='cpu')
+        #checkpoint = torch.load(self.path)
         model.load_state_dict(checkpoint['model_state_dict'])
         self.oracle = model
