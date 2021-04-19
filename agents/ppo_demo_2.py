@@ -134,12 +134,10 @@ class PPODemo(BaseAgent):
                 dist_batch, value_batch, _ = self.actor_critic(obs_batch, hidden_state_batch, mask_batch)
                 log_prob_act_batch = dist_batch.log_prob(act_batch)
 
-                pol_loss = -log_prob_act_batch * torch.max(torch.zeros(returns_batch.shape).to(self.device),
-                                                           (returns_batch - value_batch))
+                pol_loss = -log_prob_act_batch * torch.clamp((returns_batch - value_batch), min=0)
                 pol_loss = pol_loss.mean()
 
-                val_loss = 0.5 * (torch.max(torch.zeros(returns_batch.shape).to(self.device),
-                                            (returns_batch - value_batch))).pow(2)
+                val_loss = 0.5 * torch.clamp((returns_batch - value_batch), min=0).pow(2)
                 val_loss = val_loss.mean()
 
                 loss = pol_loss + self.demo_coef * val_loss
