@@ -42,7 +42,7 @@ tiny:
     recurrent: False
     hidden_size: 256
 
-tiny_demo:
+tiny_demo_il:
     n_envs: 2
     n_steps: 16
     n_checkpoints: 2
@@ -59,7 +59,7 @@ tiny_demo:
     normalise_adv: True
     normalise_reward: True
     use_gae: True
-    algo: ppo_demo
+    algo: ppo_demo_il
     architecture: ResNet
     recurrent: False
     hidden_size: 256
@@ -74,10 +74,10 @@ tiny_demo:
     demo_schedule: linear
     demo_learn_ratio: 0.1
 
-demo_1:
-    n_envs: 64
-    n_steps: 256
-    n_checkpoints: 10
+tiny_demo_imp_samp:
+    n_envs: 2
+    n_steps: 16
+    n_checkpoints: 2
     epoch: 3
     mini_batch_per_epoch: 8
     mini_batch_size: 2048
@@ -91,211 +91,18 @@ demo_1:
     normalise_adv: True
     normalise_reward: True
     use_gae: True
-    algo: ppo_demo
+    algo: ppo_demo_imp_samp
     architecture: ResNet
     recurrent: False
     hidden_size: 256
-    demo_coef: 0.01
+    demo_coef: 0.5
     demo_learning_rate: 0.0005
-    demo_batch_size: 256
-    demo_mini_batch_size: 256
-    demo_epochs: 5
-    hot_start: 0
+    demo_batch_size: 64
+    demo_mini_batch_size: 64
+    demo_epochs: 10
+    hot_start: 10
     buffer_max_samples: 100
-    num_demos: 250
+    num_demos: 10
     demo_schedule: linear
-    demo_learn_ratio: 0.1
-
-demo_2:
-    n_envs: 64
-    n_steps: 256
-    n_checkpoints: 10
-    epoch: 3
-    mini_batch_per_epoch: 8
-    mini_batch_size: 2048
-    gamma: 0.999
-    lmbda: 0.95
-    learning_rate: 0.0005
-    grad_clip_norm: 0.5
-    eps_clip: 0.2
-    value_coef: 0.5
-    entropy_coef: 0.01
-    normalise_adv: True
-    normalise_reward: True
-    use_gae: True
-    algo: ppo_demo
-    architecture: ResNet
-    recurrent: False
-    hidden_size: 256
-    demo_coef: 0.01
-    demo_learning_rate: 0.0005
-    demo_batch_size: 256
-    demo_mini_batch_size: 256
-    demo_epochs: 5
-    hot_start: 0
-    buffer_max_samples: 100
-    num_demos: 250
-    demo_schedule: linear
-    demo_learn_ratio: 0.05
-
-demo_3:
-    n_envs: 64
-    n_steps: 256
-    n_checkpoints: 10
-    epoch: 3
-    mini_batch_per_epoch: 8
-    mini_batch_size: 2048
-    gamma: 0.999
-    lmbda: 0.95
-    learning_rate: 0.0005
-    grad_clip_norm: 0.5
-    eps_clip: 0.2
-    value_coef: 0.5
-    entropy_coef: 0.01
-    normalise_adv: True
-    normalise_reward: True
-    use_gae: True
-    algo: ppo_demo
-    architecture: ResNet
-    recurrent: False
-    hidden_size: 256
-    demo_coef: 0.01
-    demo_learning_rate: 0.0005
-    demo_batch_size: 256
-    demo_mini_batch_size: 256
-    demo_epochs: 5
-    hot_start: 0
-    buffer_max_samples: 100
-    num_demos: 250
-    demo_schedule: linear
-    demo_learn_ratio: 0.01
-
-demo_4:
-    n_envs: 64
-    n_steps: 256
-    n_checkpoints: 10
-    epoch: 3
-    mini_batch_per_epoch: 8
-    mini_batch_size: 2048
-    gamma: 0.999
-    lmbda: 0.95
-    learning_rate: 0.0005
-    grad_clip_norm: 0.5
-    eps_clip: 0.2
-    value_coef: 0.5
-    entropy_coef: 0.01
-    normalise_adv: True
-    normalise_reward: True
-    use_gae: True
-    algo: ppo_demo
-    architecture: ResNet
-    recurrent: False
-    hidden_size: 256
-    demo_coef: 0.01
-    demo_learning_rate: 0.0005
-    demo_batch_size: 256
-    demo_mini_batch_size: 256
-    demo_epochs: 5
-    hot_start: 25
-    buffer_max_samples: 100
-    num_demos: 250
-    demo_schedule: linear
-    demo_learn_ratio: 0.1
-
-demo_5:
-    n_envs: 64
-    n_steps: 256
-    n_checkpoints: 10
-    epoch: 3
-    mini_batch_per_epoch: 8
-    mini_batch_size: 2048
-    gamma: 0.999
-    lmbda: 0.95
-    learning_rate: 0.0005
-    grad_clip_norm: 0.5
-    eps_clip: 0.2
-    value_coef: 0.5
-    entropy_coef: 0.01
-    normalise_adv: True
-    normalise_reward: True
-    use_gae: True
-    algo: ppo_demo
-    architecture: ResNet
-    recurrent: False
-    hidden_size: 256
-    demo_coef: 0.01
-    demo_learning_rate: 0.0005
-    demo_batch_size: 256
-    demo_mini_batch_size: 256
-    demo_epochs: 5
-    hot_start: 25
-    buffer_max_samples: 100
-    num_demos: 250
-    demo_schedule: linear
-    demo_learn_ratio: 0.05
-
-demo_6:
-    n_envs: 64
-    n_steps: 256
-    n_checkpoints: 10
-    epoch: 3
-    mini_batch_per_epoch: 8
-    mini_batch_size: 2048
-    gamma: 0.999
-    lmbda: 0.95
-    learning_rate: 0.0005
-    grad_clip_norm: 0.5
-    eps_clip: 0.2
-    value_coef: 0.5
-    entropy_coef: 0.01
-    normalise_adv: True
-    normalise_reward: True
-    use_gae: True
-    algo: ppo_demo
-    architecture: ResNet
-    recurrent: False
-    hidden_size: 256
-    demo_coef: 0.01
-    demo_learning_rate: 0.0005
-    demo_batch_size: 256
-    demo_mini_batch_size: 256
-    demo_epochs: 5
-    hot_start: 25
-    buffer_max_samples: 100
-    num_demos: 250
-    demo_schedule: linear
-    demo_learn_ratio: 0.01
-
-demo_base:
-    n_envs: 64
-    n_steps: 256
-    n_checkpoints: 10
-    epoch: 3
-    mini_batch_per_epoch: 8
-    mini_batch_size: 2048
-    gamma: 0.999
-    lmbda: 0.95
-    learning_rate: 0.0005
-    grad_clip_norm: 0.5
-    eps_clip: 0.2
-    value_coef: 0.5
-    entropy_coef: 0.01
-    normalise_adv: True
-    normalise_reward: True
-    use_gae: True
-    algo: ppo_demo
-    architecture: ResNet
-    recurrent: False
-    hidden_size: 256
-    demo_coef: 0.01
-    demo_learning_rate: 0.0005
-    demo_batch_size: 256
-    demo_mini_batch_size: 256
-    demo_epochs: 5
-    hot_start: 0
-    buffer_max_samples: 100
-    num_demos: 250
-    demo_schedule: linear
-    demo_learn_ratio: 0.000001
-
+    demo_learn_ratio: 0.5
 
