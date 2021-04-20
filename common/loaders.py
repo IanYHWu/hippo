@@ -2,8 +2,9 @@ from procgen import ProcgenEnv
 from envs.procgen_wrappers import *
 from common.model import *
 from common.actor_critic import CategoricalAC
-from agents.ppo import PPO, get_args_ppo
-from agents.ppo_demo_2 import PPODemo, get_args_ppo_demo
+from agents.ppo import PPO, get_args
+from agents.ppo_demo_il import PPODemoIL, get_args_demo_il
+from agents.ppo_demo_imp_samp import PPODemoImpSamp, get_args_demo_imp_samp
 
 
 def load_env(args, params, demo=False, demo_level_seed=None):
@@ -62,11 +63,14 @@ def load_model(params, env, device):
 
 def load_agent(env, actor_critic, storage, device, params, demo_buffer=None):
     if params.algo == "ppo":
-        params_dict = get_args_ppo(params)
+        params_dict = get_args(params)
         agent = PPO(env, actor_critic, storage, device, **params_dict)
-    elif params.algo == "ppo_demo":
-        params_dict = get_args_ppo_demo(params)
-        agent = PPODemo(env, actor_critic, storage, demo_buffer, device, **params_dict)
+    elif params.algo == "ppo_demo_il":
+        params_dict = get_args_demo_il(params)
+        agent = PPODemoIL(env, actor_critic, storage, demo_buffer, device, **params_dict)
+    elif params.algo == 'ppo_demo_imp_samp':
+        params_dict = get_args_demo_imp_samp(params)
+        agent = PPODemoImpSamp(env, actor_critic, storage, demo_buffer, device, **params_dict)
     else:
         raise NotImplementedError
 
