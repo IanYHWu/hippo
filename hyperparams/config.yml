@@ -105,4 +105,5 @@ tiny_demo_imp_samp:
     num_demos: 10
     demo_schedule: linear
     demo_learn_ratio: 0.5
+    demo_sampling_strategy: prioritised
 

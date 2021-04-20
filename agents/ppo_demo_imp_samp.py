@@ -28,7 +28,8 @@ class PPODemoImpSamp(PPO):
                  demo_learning_rate=5e-4,
                  demo_batch_size=512,
                  demo_mini_batch_size=664,
-                 demo_epochs=3):
+                 demo_epochs=3,
+                 demo_sampling_strategy='uniform'):
 
         super().__init__(env, actor_critic, storage, device)
 
@@ -52,6 +53,7 @@ class PPODemoImpSamp(PPO):
         self.demo_mini_batch_size = demo_mini_batch_size
         self.demo_epochs = demo_epochs
         self.demo_batch_size = demo_batch_size
+        self.demo_sampling_strategy = demo_sampling_strategy
 
     def demo_optimize(self):
         pi_loss_list, value_loss_list, entropy_loss_list = [], [], []
@@ -66,7 +68,6 @@ class PPODemoImpSamp(PPO):
         grad_accumulation_steps = batch_size / mini_batch_size
         grad_accumulation_count = 1
 
-        self.actor_critic.eval()
         self.demo_buffer.compute_imp_samp_advantages(self.actor_critic, gamma=self.gamma,
                                                      lmbda=self.lmbda, normalise_adv=self.normalise_adv)
 
@@ -75,7 +76,8 @@ class PPODemoImpSamp(PPO):
             recurrent = self.actor_critic.is_recurrent()
             generator = self.demo_buffer.imp_samp_demo_generator(batch_size=batch_size,
                                                                  mini_batch_size=mini_batch_size,
-                                                                 recurrent=recurrent)
+                                                                 recurrent=recurrent,
+                                                                 sample_method=self.demo_sampling_strategy)
             for sample in generator:
                 obs_batch, hidden_state_batch, act_batch, return_batch, mask_batch, old_log_prob_act_batch, \
                 old_value_batch, adv_batch = sample
@@ -133,6 +135,7 @@ def get_args_demo_imp_samp(params):
                   'demo_learning_rate': params.demo_learning_rate,
                   'demo_mini_batch_size': params.demo_mini_batch_size,
                   'demo_epochs': params.demo_epochs,
-                  'demo_batch_size': params.demo_batch_size}
+                  'demo_batch_size': params.demo_batch_size,
+                  'demo_sampling_strategy': params.demo_sampling_strategy}
 
     return param_dict

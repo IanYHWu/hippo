@@ -1,5 +1,5 @@
 import torch
-from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
+from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler, WeightedRandomSampler
 import numpy as np
 from collections import deque
 
@@ -302,13 +302,14 @@ class DemoReplayBuffer:
         val_list = []
         with torch.no_grad():
             for i in range(0, len(self.obs_store)):
-                dist_batch, val_batch, _ = actor_critic(self.obs_store[i].squeeze(1).float(),
-                                                        self.hidden_states_store[i].float(), self.mask_store[i].float())
-                log_prob_act_batch = dist_batch.log_prob(self.act_store[i])
+                dist_batch, val_batch, _ = actor_critic(self.obs_store[i].squeeze(1).float().to(self.device),
+                                                        self.hidden_states_store[i].float().to(self.device),
+                                                        self.mask_store[i].float().to(self.device))
+                log_prob_act_batch = dist_batch.log_prob(self.act_store[i].to(self.device))
                 val_list.append(val_batch)
                 log_prob_act_list.append(log_prob_act_batch)
-            self.value_store = self._list_to_tensor(val_list)
-            self.log_prob_act_store = self._list_to_tensor(log_prob_act_list)
+            self.value_store = self._list_to_tensor(val_list).cpu()
+            self.log_prob_act_store = self._list_to_tensor(log_prob_act_list).cpu()
 
     def compute_imp_samp_advantages(self, actor_critic, gamma=0.99, lmbda=0.95, normalise_adv=True):
         self._compute_pi_v(actor_critic)
@@ -317,13 +318,13 @@ class DemoReplayBuffer:
             adv_store = torch.zeros(self.max_len)
             A = 0
             for i in reversed(range(self.max_len)):
-                rew = self.rew_store[sample][i]
-                mask = self.mask_store[sample][i]
-                value = self.value_store[sample][i]
+                rew = self.rew_store[sample][i].cpu()
+                mask = self.mask_store[sample][i].cpu()
+                value = self.value_store[sample][i].cpu()
                 if i == self.max_len - 1:
                     next_value = 0
                 else:
-                    next_value = self.value_store[sample][i + 1]
+                    next_value = self.value_store[sample][i + 1].cpu()
                 delta = (rew + gamma * next_value * mask) - value
                 adv_store[i] = A = gamma * lmbda * A * mask + delta
             if normalise_adv:
@@ -337,23 +338,25 @@ class DemoReplayBuffer:
             if sample_method == 'uniform':
                 sampler = BatchSampler(SubsetRandomSampler(range(batch_size)),
                                        mini_batch_size, drop_last=True)
-                for indices in sampler:
-                    obs_batch = torch.FloatTensor(self.obs_store.float()).reshape(-1, *self.obs_size)[indices].to(self.device)
-                    hidden_state_batch = torch.FloatTensor(self.hidden_states_store.float()).reshape(
-                        -1, self.hidden_state_size).to(self.device)
-                    act_batch = torch.FloatTensor(self.act_store.float()).reshape(-1)[indices].to(self.device)
-                    mask_batch = torch.FloatTensor(self.mask_store.float()).reshape(-1)[indices].to(self.device)
-                    log_prob_act_batch = torch.FloatTensor(self.log_prob_act_store.float()).reshape(-1)[indices].to(self.device)
-                    val_batch = torch.FloatTensor(self.value_store.float()).reshape(-1)[indices].to(self.device)
-                    adv_batch = torch.FloatTensor(self.adv_store.float()).reshape(-1)[indices].to(self.device)
-                    returns_batch = torch.FloatTensor(self.returns_store.float()).reshape(-1)[indices].to(self.device)
-                    yield obs_batch, hidden_state_batch, act_batch, returns_batch, \
-                          mask_batch, log_prob_act_batch, val_batch, adv_batch
+            elif sample_method == 'prioritised':
+                weights = torch.clamp(self.returns_store.reshape(-1) - self.value_store.reshape(-1), min=0)
+                sampler = BatchSampler(WeightedRandomSampler(weights, batch_size, replacement=False), mini_batch_size,
+                                       drop_last=True)
             else:
                 raise NotImplementedError
 
-        else:
-            raise NotImplementedError
+            for indices in sampler:
+                obs_batch = torch.FloatTensor(self.obs_store.float()).reshape(-1, *self.obs_size)[indices].to(self.device)
+                hidden_state_batch = torch.FloatTensor(self.hidden_states_store.float()).reshape(
+                    -1, self.hidden_state_size).to(self.device)
+                act_batch = torch.FloatTensor(self.act_store.float()).reshape(-1)[indices].to(self.device)
+                mask_batch = torch.FloatTensor(self.mask_store.float()).reshape(-1)[indices].to(self.device)
+                log_prob_act_batch = torch.FloatTensor(self.log_prob_act_store.float()).reshape(-1)[indices].to(self.device)
+                val_batch = torch.FloatTensor(self.value_store.float()).reshape(-1)[indices].to(self.device)
+                adv_batch = torch.FloatTensor(self.adv_store.float()).reshape(-1)[indices].to(self.device)
+                returns_batch = torch.FloatTensor(self.returns_store.float()).reshape(-1)[indices].to(self.device)
+                yield obs_batch, hidden_state_batch, act_batch, returns_batch, \
+                      mask_batch, log_prob_act_batch, val_batch, adv_batch
 
 
 if __name__ == '__main__':
