@@ -155,7 +155,8 @@ class DemoStorage:
         self.obs_store.append(torch.from_numpy(last_obs.copy()))
         self.hidden_states_store.append(torch.from_numpy(last_hidden_state.copy()))
 
-    def _list_to_tensor(self, list_of_tensors):
+    @staticmethod
+    def _list_to_tensor(list_of_tensors):
         big_tensor = torch.stack(list_of_tensors)
         return big_tensor
 
@@ -191,6 +192,7 @@ class DemoReplayBuffer:
         obs = demo_store.obs_store
         hidden_states = demo_store.hidden_states_store
         actions = demo_store.act_store
+        rewards = demo_store.rew_store
         trajectory_len = demo_store.trajectory_length
         returns = demo_store.returns_store.reshape(trajectory_len, 1)
         demo_store.reset()
@@ -201,6 +203,7 @@ class DemoReplayBuffer:
             self.obs_store = obs.unsqueeze(0)
             self.hidden_states_store = hidden_states.unsqueeze(0)
             self.act_store = actions.unsqueeze(0)
+            self.rew_store = rewards.unsqueeze(0)
             self.returns_store = returns.unsqueeze(0)
             self.mask_store = mask.unsqueeze(0)
             self.max_len = trajectory_len
@@ -210,6 +213,7 @@ class DemoReplayBuffer:
                 hidden_states = self._pad_tensor(hidden_states, self.max_len, pad_trajectory=True)
                 actions = self._pad_tensor(actions, self.max_len, pad_trajectory=True)
                 returns = self._pad_tensor(returns, self.max_len, pad_trajectory=True)
+                rewards = self._pad_tensor(rewards, self.max_len, pad_trajectory=True)
                 mask = self._pad_tensor(mask, self.max_len, pad_trajectory=True)
 
             elif trajectory_len > self.max_len:
@@ -217,6 +221,7 @@ class DemoReplayBuffer:
                 self.hidden_states_store = self._pad_tensor(self.hidden_states_store, trajectory_len, pad_trajectory=False)
                 self.act_store = self._pad_tensor(self.act_store, trajectory_len, pad_trajectory=False)
                 self.returns_store = self._pad_tensor(self.returns_store, trajectory_len, pad_trajectory=False)
+                self.rew_store = self._pad_tensor(self.rew_store, trajectory_len, pad_trajectory=False)
                 self.mask_store = self._pad_tensor(self.mask_store, trajectory_len, pad_trajectory=False)
                 self.max_len = trajectory_len
 
@@ -224,6 +229,7 @@ class DemoReplayBuffer:
             self.hidden_states_store = self._add_to_buffer(hidden_states, self.hidden_states_store)
             self.act_store = self._add_to_buffer(actions, self.act_store)
             self.returns_store = self._add_to_buffer(returns, self.returns_store)
+            self.rew_store = self._add_to_buffer(rewards, self.rew_store)
             self.mask_store = self._add_to_buffer(mask, self.mask_store)
 
         n_samples = self.get_buffer_n_samples()
@@ -231,6 +237,7 @@ class DemoReplayBuffer:
             self.obs_store = self.obs_store[:-1, :]
             self.hidden_states_store = self.hidden_states_store[:-1, :]
             self.act_store = self.act_store[:-1, :]
+            self.rew_store = self.rew_store[:-1, :]
             self.returns_store = self.returns_store[:-1, :]
             self.mask_store = self.mask_store[:-1, :]
 
@@ -260,7 +267,12 @@ class DemoReplayBuffer:
         new_buffer = torch.cat((trajectory.unsqueeze(0), buffer), dim=0)
         return new_buffer
 
-    def fetch_demo_generator(self, batch_size, mini_batch_size, sample_method='uniform', recurrent=False):
+    @staticmethod
+    def _list_to_tensor(list_of_tensors):
+        big_tensor = torch.stack(list_of_tensors)
+        return big_tensor
+
+    def il_demo_generator(self, batch_size, mini_batch_size, sample_method='uniform', recurrent=False):
         if not recurrent:
             if sample_method == 'uniform':
                 sampler = BatchSampler(SubsetRandomSampler(range(batch_size)),
@@ -284,6 +296,64 @@ class DemoReplayBuffer:
 
     def get_buffer_n_samples(self):
         return len(self.obs_store)
+
+    def _compute_pi_v(self, actor_critic):
+        log_prob_act_list = []
+        val_list = []
+        with torch.no_grad():
+            for i in range(0, len(self.obs_store)):
+                dist_batch, val_batch, _ = actor_critic(self.obs_store[i].squeeze(1).float(),
+                                                        self.hidden_states_store[i].float(), self.mask_store[i].float())
+                log_prob_act_batch = dist_batch.log_prob(self.act_store[i])
+                val_list.append(val_batch)
+                log_prob_act_list.append(log_prob_act_batch)
+            self.value_store = self._list_to_tensor(val_list)
+            self.log_prob_act_store = self._list_to_tensor(log_prob_act_list)
+
+    def compute_imp_samp_advantages(self, actor_critic, gamma=0.99, lmbda=0.95, normalise_adv=True):
+        self._compute_pi_v(actor_critic)
+        adv_list = []
+        for sample in range(0, len(self.act_store)):
+            adv_store = torch.zeros(self.max_len)
+            A = 0
+            for i in reversed(range(self.max_len)):
+                rew = self.rew_store[sample][i]
+                mask = self.mask_store[sample][i]
+                value = self.value_store[sample][i]
+                if i == self.max_len - 1:
+                    next_value = 0
+                else:
+                    next_value = self.value_store[sample][i + 1]
+                delta = (rew + gamma * next_value * mask) - value
+                adv_store[i] = A = gamma * lmbda * A * mask + delta
+            if normalise_adv:
+                adv_store = (adv_store - torch.mean(adv_store)) / (torch.std(adv_store) + 1e-8)
+            adv_list.append(adv_store)
+
+        self.adv_store = self._list_to_tensor(adv_list)
+
+    def imp_samp_demo_generator(self, batch_size, mini_batch_size, recurrent=False, sample_method='uniform'):
+        if not recurrent:
+            if sample_method == 'uniform':
+                sampler = BatchSampler(SubsetRandomSampler(range(batch_size)),
+                                       mini_batch_size, drop_last=True)
+                for indices in sampler:
+                    obs_batch = torch.FloatTensor(self.obs_store.float()).reshape(-1, *self.obs_size)[indices].to(self.device)
+                    hidden_state_batch = torch.FloatTensor(self.hidden_states_store.float()).reshape(
+                        -1, self.hidden_state_size).to(self.device)
+                    act_batch = torch.FloatTensor(self.act_store.float()).reshape(-1)[indices].to(self.device)
+                    mask_batch = torch.FloatTensor(self.mask_store.float()).reshape(-1)[indices].to(self.device)
+                    log_prob_act_batch = torch.FloatTensor(self.log_prob_act_store.float()).reshape(-1)[indices].to(self.device)
+                    val_batch = torch.FloatTensor(self.value_store.float()).reshape(-1)[indices].to(self.device)
+                    adv_batch = torch.FloatTensor(self.adv_store.float()).reshape(-1)[indices].to(self.device)
+                    returns_batch = torch.FloatTensor(self.returns_store.float()).reshape(-1)[indices].to(self.device)
+                    yield obs_batch, hidden_state_batch, act_batch, returns_batch, \
+                          mask_batch, log_prob_act_batch, val_batch, adv_batch
+            else:
+                raise NotImplementedError
+
+        else:
+            raise NotImplementedError
 
 
 if __name__ == '__main__':
@@ -326,7 +396,7 @@ if __name__ == '__main__':
     print("final store:")
     print(rb.act_store)
 
-    generator = rb.fetch_demo_generator(batch_size=6, mini_batch_size=3, sample_method='uniform', recurrent=False)
+    generator = rb.il_demo_generator(batch_size=6, mini_batch_size=3, sample_method='uniform', recurrent=False)
     for sample in generator:
         obs_batch, hidden_state_batch, act_batch, mask_batch, returns_batch = sample
         print(act_batch)
