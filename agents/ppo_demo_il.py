@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 
-class PPODemo(PPO):
+class PPODemoIL(PPO):
 
     def __init__(self,
                  env,
@@ -64,9 +64,9 @@ class PPODemo(PPO):
         self.actor_critic.train()
         for e in range(self.demo_epochs):
             recurrent = self.actor_critic.is_recurrent()
-            generator = self.demo_buffer.fetch_demo_generator(batch_size=batch_size,
-                                                              mini_batch_size=mini_batch_size,
-                                                              recurrent=recurrent)
+            generator = self.demo_buffer.il_demo_generator(batch_size=batch_size,
+                                                           mini_batch_size=mini_batch_size,
+                                                           recurrent=recurrent)
             for sample in generator:
                 obs_batch, hidden_state_batch, act_batch, mask_batch, returns_batch = sample
                 dist_batch, value_batch, _ = self.actor_critic(obs_batch, hidden_state_batch, mask_batch)
@@ -95,7 +95,7 @@ class PPODemo(PPO):
         return summary
 
 
-def get_args_ppo_demo(params):
+def get_args_demo_il(params):
     param_dict = {'n_steps': params.n_steps,
                   'n_envs': params.n_envs,
                   'epoch': params.epoch,
