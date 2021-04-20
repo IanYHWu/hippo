@@ -28,9 +28,12 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
     start_ = time.time()
     demo_sum_rewards = []
 
-    if params.algo == 'ppo_demo':
+    if params.algo == 'ppo_demo_il' or params.algo == 'ppo_demo_imp_samp':
         demo = True
-        print("Using Agent - PPO Demo")
+        if params.algo == 'ppo_demo_il':
+            print("Using Agent - PPO Demo, Imitation Learning Variant")
+        else:
+            print("Using Agent - PPO Demo, Importance Sampling Variant")
         if params.hot_start:
             print("Hot Start - {} Demonstrations".format(params.hot_start))
             for i in range(0, params.hot_start):
@@ -155,7 +158,7 @@ def main(args):
     print("Initialising storage...")
     rollout = Storage(observation_shape, params.hidden_size, params.n_steps, params.n_envs, device)
 
-    if params.algo == 'ppo_demo':
+    if params.algo == 'ppo_demo_il' or params.algo == 'ppo_demo_imp_samp':
         print("Initialising demonstration storage and buffer...")
         demo_rollout = DemoStorage(device)
         demo_buffer = DemoReplayBuffer(observation_shape, params.hidden_size, device,
