@@ -100,7 +100,7 @@ class PPO(BaseAgent):
         return summary
 
 
-def get_args_ppo(params):
+def get_args(params):
     param_dict = {'n_steps': params.n_steps,
                   'n_envs': params.n_envs,
                   'epoch': params.epoch,
