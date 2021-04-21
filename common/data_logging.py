@@ -138,7 +138,8 @@ class Logger:
             wandb_id = self.params.wandb_id
             wandb.init(project=self.args.wandb_project_name, name=self.args.wandb_name, resume="must", id=wandb_id)
         else:
-            wandb.init(project=self.args.wandb_project_name, name=self.args.wandb_name)
+            wandb.init(project=self.args.wandb_project_name, name=self.args.wandb_name,
+                       settings=wandb.Settings(start_method='fork'))
             wandb_id = wandb.util.generate_id()
             self.params.wandb_id = wandb_id
         wandb.config.update(self.params)
