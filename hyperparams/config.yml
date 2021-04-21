@@ -104,6 +104,8 @@ tiny_demo_imp_samp:
     buffer_max_samples: 100
     num_demos: 10
     demo_schedule: linear
-    demo_learn_ratio: 0.5
+    demo_learn_ratio: 0.1
     demo_sampling_strategy: prioritised
+    demo_entropy_coef: 0.01
+    demo_value_coef: 0.005
 
