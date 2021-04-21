@@ -29,7 +29,9 @@ class PPODemoImpSamp(PPO):
                  demo_batch_size=512,
                  demo_mini_batch_size=664,
                  demo_epochs=3,
-                 demo_sampling_strategy='uniform'):
+                 demo_sampling_strategy='uniform',
+                 demo_value_coef=0.05,
+                 demo_entropy_coef=0.01):
 
         super().__init__(env, actor_critic, storage, device)
 
@@ -48,12 +50,14 @@ class PPODemoImpSamp(PPO):
         self.lmbda = lmbda
         self.normalise_adv = normalise_adv
         self.demo_buffer = demo_buffer
-        self.demo_optimizer = optim.Adam(self.actor_critic.parameters(), lr=demo_learning_rate, eps=1e-5)
+        # self.demo_optimizer = optim.Adam(self.actor_critic.parameters(), lr=demo_learning_rate, eps=1e-5)
         self.demo_learning_rate = demo_learning_rate
         self.demo_mini_batch_size = demo_mini_batch_size
         self.demo_epochs = demo_epochs
         self.demo_batch_size = demo_batch_size
         self.demo_sampling_strategy = demo_sampling_strategy
+        self.demo_value_coef = demo_value_coef
+        self.demo_entropy_coef = demo_entropy_coef
 
     def demo_optimize(self):
         pi_loss_list, value_loss_list, entropy_loss_list = [], [], []
@@ -99,7 +103,7 @@ class PPODemoImpSamp(PPO):
 
                 # actor_critic Entropy
                 entropy_loss = dist_batch.entropy().mean()
-                loss = pi_loss + self.value_coef * value_loss - self.entropy_coef * entropy_loss
+                loss = pi_loss + self.demo_value_coef * value_loss - self.demo_entropy_coef * entropy_loss
                 loss.backward()
 
                 if grad_accumulation_count % grad_accumulation_steps == 0:
@@ -136,6 +140,8 @@ def get_args_demo_imp_samp(params):
                   'demo_mini_batch_size': params.demo_mini_batch_size,
                   'demo_epochs': params.demo_epochs,
                   'demo_batch_size': params.demo_batch_size,
-                  'demo_sampling_strategy': params.demo_sampling_strategy}
+                  'demo_sampling_strategy': params.demo_sampling_strategy,
+                  'demo_value_coef': params.demo_value_coef,
+                  'demo_entropy_coef': params.demo_entropy_coef}
 
     return param_dict
