@@ -119,6 +119,7 @@ class Storage:
         else:
             rew_batch = self.rew_batch.numpy()
         if 'env_done' in self.info_batch[0][0]:
+            print('env done')
             done_batch = []
             for step in range(self.num_steps):
                 infos = self.info_batch[step]

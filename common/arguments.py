@@ -49,6 +49,14 @@ parser.add_argument(
     '--add_timesteps', type=int, default=int(0), help='Additional timesteps to train - used for checkpoint training'
 )
 
+# evaluation args
+parser.add_argument(
+    '--evaluate', action='store_true', help='Perform evaluation after every rollout'
+)
+parser.add_argument(
+    '--num_test_episodes', type=int, default=10, help='Number of test episodes to perform per evaluation run'
+)
+
 # wandb args
 parser.add_argument(
     '--wandb', action='store_true', help='Log results on wandb'

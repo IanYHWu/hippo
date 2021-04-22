@@ -14,11 +14,12 @@ from common.storage import Storage
 from common.storage import DemoStorage
 from common.storage import DemoReplayBuffer
 from common.controller import DemoScheduler
+from test import Evaluator
 
 from agents.demonstrator import Oracle
 
 
-def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params,
+def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params, evaluator=None,
           controller=None, demo_rollout=None, demo_buffer=None, demonstrator=None):
     save_every = num_timesteps // params.n_checkpoints
     checkpoint_count = 0
@@ -93,7 +94,11 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
 
         curr_timestep += params.n_steps * params.n_envs
         rew_batch, done_batch = rollout.fetch_log_data()
-        logger.feed(rew_batch, done_batch)
+        if args.evaluate:
+            eval_rewards, eval_len = evaluator.evaluate(actor_critic)
+            logger.feed(rew_batch, done_batch, eval_rewards, eval_len)
+        else:
+            logger.feed(rew_batch, done_batch)
         logger.log_results()
 
         # Save the model
@@ -158,6 +163,12 @@ def main(args):
     print("Initialising storage...")
     rollout = Storage(observation_shape, params.hidden_size, params.n_steps, params.n_envs, device)
 
+    if args.evaluate:
+        print("Initialising evaluator...")
+        evaluator = Evaluator(args, params)
+    else:
+        evaluator = None
+
     if params.algo == 'ppo_demo_il' or params.algo == 'ppo_demo_imp_samp':
         print("Initialising demonstration storage and buffer...")
         demo_rollout = DemoStorage(device)
@@ -170,12 +181,12 @@ def main(args):
         demonstrator = Oracle(args.oracle_path, demo_model, device)
         print("Initialising agent...")
         agent = load_agent(env, actor_critic, rollout, device, params=params, demo_buffer=demo_buffer)
-        train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params,
+        train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params, evaluator,
               controller, demo_rollout, demo_buffer, demonstrator)
     else:
         print("Initialising agent...")
         agent = load_agent(env, actor_critic, rollout, device, params)
-        train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params)
+        train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params, evaluator)
 
 
 if __name__ == "__main__":

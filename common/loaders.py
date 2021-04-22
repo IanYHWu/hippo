@@ -7,14 +7,14 @@ from agents.ppo_demo_il import PPODemoIL, get_args_demo_il
 from agents.ppo_demo_imp_samp import PPODemoImpSamp, get_args_demo_imp_samp
 
 
-def load_env(args, params, demo=False, demo_level_seed=None):
-    if not demo:
+def load_env(args, params, eval=False, demo=False, demo_level_seed=None, eval_seed=None):
+    if not demo and not eval:
         env = ProcgenEnv(num_envs=params.n_envs,
                          env_name=args.env_name,
                          start_level=args.start_level,
                          num_levels=args.num_levels,
                          distribution_mode=args.distribution_mode)
-    else:
+    elif demo and not eval:
         demo_level_seed = np.array([demo_level_seed], dtype='int32')
         assert demo_level_seed is not None
         env = ProcgenEnv(num_envs=1,
@@ -22,6 +22,13 @@ def load_env(args, params, demo=False, demo_level_seed=None):
                          start_level=demo_level_seed,
                          num_levels=1,
                          distribution_mode=args.distribution_mode)
+    else:
+        env = ProcgenEnv(num_envs=1,
+                         env_name=args.env_name,
+                         start_level=eval_seed,
+                         num_levels=0,
+                         distribution_mode=args.distribution_mode)
+
     normalize_rew = params.normalise_reward
     env = VecExtractDictObs(env, "rgb")
     if normalize_rew:

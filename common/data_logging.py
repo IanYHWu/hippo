@@ -30,6 +30,9 @@ class Logger:
         self.episode_len_buffer = deque(maxlen=40)
         self.episode_reward_buffer = deque(maxlen=40)
 
+        self.eval_rewards = []
+        self.eval_lens = []
+
         self.curr_timestep = 0
         self.num_episodes = 0
 
@@ -37,6 +40,10 @@ class Logger:
 
         if self.log_wandb:
             self._initialise_wandb()
+
+    def _eval_reset(self):
+        self.eval_rewards = []
+        self.eval_lens = []
 
     def _make_dirs(self):
         root_path = self.root + '/' + self.name
@@ -77,7 +84,7 @@ class Logger:
 
         return model, curr_timestep
 
-    def feed(self, rew_batch, done_batch):
+    def feed(self, rew_batch, done_batch, eval_reward=None, eval_len=None):
         steps = rew_batch.shape[0]
         rew_batch = rew_batch.T
         done_batch = done_batch.T
@@ -90,6 +97,8 @@ class Logger:
                     self.episode_reward_buffer.append(np.sum(self.episode_rewards[i]))
                     self.episode_rewards[i] = []
                     self.num_episodes += 1
+        self.eval_rewards.append(eval_reward)
+        self.eval_lens.append(eval_len)
         self.curr_timestep += (self.n_envs * steps)
 
     def _check_log_exists(self):
@@ -104,7 +113,10 @@ class Logger:
             episode_statistics = self._get_episode_statistics()
             episode_statistics_list = list(episode_statistics.values())
         else:
-            episode_statistics_list = [None] * 6
+            if self.args.evaluate:
+                episode_statistics_list = [None] * 8
+            else:
+                episode_statistics_list = [None] * 6
 
         results = [self.curr_timestep] + [wall_time] + [self.num_episodes] + episode_statistics_list
         if self._check_log_exists():
@@ -113,24 +125,53 @@ class Logger:
             df.loc[len(df)] = np.array(results)
             df.to_csv(self.log_path)
         else:
-            df = pd.DataFrame(np.array([results]),
-                              columns=['timesteps', 'wall_time', 'num_episodes',
-                                       'max_episode_rewards', 'mean_episode_rewards', 'min_episode_rewards',
-                                       'max_episode_len', 'mean_episode_len', 'min_episode_len'])
+            if self.args.evaluate:
+                df = pd.DataFrame(np.array([results]),
+                                  columns=['timesteps', 'wall_time', 'num_train_episodes',
+                                           'train_max_episode_rewards', 'train_mean_episode_rewards',
+                                           'train_min_episode_rewards', 'train_max_episode_len',
+                                           'train_mean_episode_len', 'train_min_episode_len',
+                                           'test_mean_episode_rewards', 'test_mean_episode_len'])
+            else:
+                df = pd.DataFrame(np.array([results]),
+                                  columns=['timesteps', 'wall_time', 'num_train_episodes',
+                                           'train_max_episode_rewards', 'train_mean_episode_rewards',
+                                           'train_min_episode_rewards',
+                                           'train_max_episode_len', 'train_mean_episode_len', 'train_min_episode_len'])
             df.to_csv(self.log_path)
 
         if self.log_wandb:
-            wandb.log({'timesteps': self.curr_timestep,
-                       'mean_episode_rewards': episode_statistics_list[1],
-                       'mean_episode_len': episode_statistics_list[4]})
+            if self.args.evaluate:
+                wandb.log({'timesteps': self.curr_timestep,
+                           'train_mean_episode_rewards': episode_statistics_list[1],
+                           'train_mean_episode_len': episode_statistics_list[4],
+                           'test_mean_episode_rewards': episode_statistics_list[6],
+                           'test_mean_episode_len': episode_statistics_list[7]})
+            else:
+                wandb.log({'timesteps': self.curr_timestep,
+                           'train_mean_episode_rewards': episode_statistics_list[1],
+                           'train_mean_episode_len': episode_statistics_list[4]})
+
+        self._eval_reset()
 
     def _get_episode_statistics(self):
-        episode_statistics = {'Rewards/max_episodes': np.max(self.episode_reward_buffer),
-                              'Rewards/mean_episodes': np.mean(self.episode_reward_buffer),
-                              'Rewards/min_episodes': np.min(self.episode_reward_buffer),
-                              'Len/max_episodes': np.max(self.episode_len_buffer),
-                              'Len/mean_episodes': np.mean(self.episode_len_buffer),
-                              'Len/min_episodes': np.min(self.episode_len_buffer)}
+        if self.args.evaluate:
+            episode_statistics = {'Train Rewards/max_episodes': np.max(self.episode_reward_buffer),
+                                  'Train Rewards/mean_episodes': np.mean(self.episode_reward_buffer),
+                                  'Train Rewards/min_episodes': np.min(self.episode_reward_buffer),
+                                  'Train Len/max_episodes': np.max(self.episode_len_buffer),
+                                  'Train Len/mean_episodes': np.mean(self.episode_len_buffer),
+                                  'Train Len/min_episodes': np.min(self.episode_len_buffer),
+                                  'Test Rewards/mean_episodes': np.mean(self.eval_rewards),
+                                  'Test Len/mean_episodes': np.mean(self.eval_lens)}
+        else:
+            episode_statistics = {'Train Rewards/max_episodes': np.max(self.episode_reward_buffer),
+                                  'Train Rewards/mean_episodes': np.mean(self.episode_reward_buffer),
+                                  'Train Rewards/min_episodes': np.min(self.episode_reward_buffer),
+                                  'Train Len/max_episodes': np.max(self.episode_len_buffer),
+                                  'Train Len/mean_episodes': np.mean(self.episode_len_buffer),
+                                  'Train Len/min_episodes': np.min(self.episode_len_buffer)}
+
         return episode_statistics
 
     def _initialise_wandb(self):
