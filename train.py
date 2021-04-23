@@ -38,7 +38,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
         if params.hot_start:
             print("Hot Start - {} Demonstrations".format(params.hot_start))
             for i in range(0, params.hot_start):
-                demo_level_seed = random.randint(0, int(100000))
+                demo_level_seed = random.randint(0, int(2147483647))
                 demo_env = load_env(args, params, demo=True, demo_level_seed=demo_level_seed)
                 demo_obs = demo_env.reset()
                 demo_hidden_state = np.zeros((1, rollout.hidden_state_size))
@@ -58,7 +58,8 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
     print("Now training...")
     while curr_timestep < num_timesteps:
         actor_critic.eval()
-        demonstrator.oracle.eval()
+        if demonstrator is not None:
+            demonstrator.oracle.eval()
         for step in range(params.n_steps):
             act, log_prob_act, value, next_hidden_state = agent.predict(obs, hidden_state, done)
             next_obs, rew, done, info = env.step(act)
@@ -165,7 +166,7 @@ def main(args):
 
     if args.evaluate:
         print("Initialising evaluator...")
-        evaluator = Evaluator(args, params)
+        evaluator = Evaluator(args, params, device)
     else:
         evaluator = None
 

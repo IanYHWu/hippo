@@ -6,14 +6,14 @@ from common.loaders import load_env
 
 
 class Evaluator:
-    def __init__(self, args, params):
+    def __init__(self, args, params, device):
         self.args = args
         self.params = params
-        self.device = args.device
+        self.device = device
 
     def evaluate(self, actor_critic):
         actor_critic.eval()
-        eval_seed = random.randint(0, int(100000))
+        eval_seed = random.randint(0, int(2147483647))
         env = load_env(self.args, self.params, eval=True, eval_seed=eval_seed)
         obs = env.reset()
         hidden_state = np.zeros((1, self.params.hidden_size))
