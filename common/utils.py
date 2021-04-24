@@ -43,3 +43,8 @@ def adjust_lr(optimizer, init_lr, timesteps, max_timesteps):
 def get_n_params(model):
     return str(np.round(np.array([p.numel() for p in model.parameters()]).sum() / 1e6, 3)) + ' M params'
 
+
+def extract_seeds(info):
+    seeds_list = [d['level_seed'] for d in info]
+    return seeds_list
+
