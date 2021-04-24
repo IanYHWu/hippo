@@ -73,6 +73,7 @@ tiny_demo_il:
     num_demos: 10
     demo_schedule: linear
     demo_learn_ratio: 0.1
+    demo_multi: False
 
 tiny_demo_imp_samp:
     n_envs: 2
@@ -108,4 +109,42 @@ tiny_demo_imp_samp:
     demo_sampling_strategy: prioritised
     demo_entropy_coef: 0.01
     demo_value_coef: 0.005
+    demo_multi: False
+
+tiny_demo_imp_samp_multi:
+    n_envs: 2
+    n_steps: 256
+    n_checkpoints: 2
+    epoch: 3
+    mini_batch_per_epoch: 8
+    mini_batch_size: 2048
+    gamma: 0.999
+    lmbda: 0.95
+    learning_rate: 0.0005
+    grad_clip_norm: 0.5
+    eps_clip: 0.2
+    value_coef: 0.5
+    entropy_coef: 0.01
+    normalise_adv: True
+    normalise_reward: True
+    use_gae: True
+    algo: ppo_demo_imp_samp
+    architecture: ResNet
+    recurrent: False
+    hidden_size: 256
+    demo_coef: 0.5
+    demo_learning_rate: 0.0005
+    demo_batch_size: 64
+    demo_mini_batch_size: 64
+    demo_epochs: 10
+    hot_start: 10
+    buffer_max_samples: 100
+    num_demos: 10
+    demo_schedule: linear
+    demo_learn_ratio: 1
+    demo_sampling_strategy: prioritised
+    demo_entropy_coef: 0.01
+    demo_value_coef: 0.005
+    demo_multi: True
+    demo_multi_steps: 1024
 
