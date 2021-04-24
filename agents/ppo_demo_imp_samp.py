@@ -61,10 +61,10 @@ class PPODemoImpSamp(PPO):
 
     def demo_optimize(self):
         pi_loss_list, value_loss_list, entropy_loss_list = [], [], []
-        buffer_size = self.demo_buffer.get_buffer_capacity()
+        n_valid_transitions = self.demo_buffer.get_n_valid_transitions()
         batch_size = self.demo_batch_size
-        if buffer_size < batch_size:
-            batch_size = buffer_size
+        if n_valid_transitions < batch_size:
+            batch_size = n_valid_transitions
         mini_batch_size = self.demo_mini_batch_size
 
         if batch_size < mini_batch_size:
