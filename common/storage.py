@@ -434,13 +434,6 @@ class DemoReplayBuffer:
             self.adv_store = (self.adv_store - adv_mean) / adv_std
 
     def imp_samp_demo_generator(self, batch_size, mini_batch_size, recurrent=False, sample_method='uniform'):
-        print("val: {}".format(self.value_store))
-        print("val shape: {}".format(self.value_store.shape))
-        print("mask: {}".format(self.mask_store))
-        print("mask shape: {}".format(self.mask_store.shape))
-        print("adv: {}".format(self.adv_store))
-        print("adv shape: {}".format(self.adv_store.shape))
-
         if not recurrent:
             mask_weights = self.mask_store.squeeze(-1).reshape(-1)
             if sample_method == 'uniform':
@@ -449,7 +442,6 @@ class DemoReplayBuffer:
                                        drop_last=True)
             elif sample_method == 'prioritised':
                 weights = mask_weights * torch.abs(self.returns_store.reshape(-1) - self.value_store.reshape(-1))
-                print("weights: {}, {}".format(weights, weights.shape))
                 sampler = BatchSampler(WeightedRandomSampler(weights, batch_size, replacement=False), mini_batch_size,
                                        drop_last=True)
             elif sample_method == 'prioritised_clamp':

@@ -109,12 +109,15 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                 demo_obs = demo_env.reset()
                 demo_hidden_state = np.zeros((params.n_envs, rollout.hidden_state_size))
                 demo_done = np.zeros(params.n_envs)
+                printed = False
                 for step in range(params.demo_multi_steps):
                     demo_act, demo_next_hidden_state = demonstrator.predict(demo_obs, demo_hidden_state, demo_done)
                     demo_next_obs, demo_rew, demo_done, demo_info = demo_env.step(demo_act)
                     demo_rollout.store(demo_obs, demo_hidden_state, demo_act, demo_rew, demo_done)
                     demo_obs = demo_next_obs
                     demo_hidden_state = demo_next_hidden_state
+                    if not printed:
+                        printed = True
                 demo_rollout.compute_returns()
                 demo_buffer.store(demo_rollout)
                 demo_env.close()
