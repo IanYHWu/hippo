@@ -7,17 +7,23 @@ from agents.ppo_demo_il import PPODemoIL, get_args_demo_il
 from agents.ppo_demo_imp_samp import PPODemoImpSamp, get_args_demo_imp_samp
 
 
-def load_env(args, params, eval=False, demo=False, demo_level_seed=None, eval_seed=None):
+def load_env(args, params, eval=False, demo=False, multi_demo=False, demo_level_seed=None, eval_seed=None):
     if not demo and not eval:
         env = ProcgenEnv(num_envs=params.n_envs,
                          env_name=args.env_name,
                          start_level=args.start_level,
                          num_levels=args.num_levels,
                          distribution_mode=args.distribution_mode)
-    elif demo and not eval:
+    elif demo and not multi_demo and not eval:
         demo_level_seed = np.array([demo_level_seed], dtype='int32')
-        assert demo_level_seed is not None
         env = ProcgenEnv(num_envs=1,
+                         env_name=args.env_name,
+                         start_level=demo_level_seed,
+                         num_levels=1,
+                         distribution_mode=args.distribution_mode)
+    elif demo and multi_demo and not eval:
+        demo_level_seed = np.array(demo_level_seed, dtype='int32')
+        env = ProcgenEnv(num_envs=params.n_envs,
                          env_name=args.env_name,
                          start_level=demo_level_seed,
                          num_levels=1,
