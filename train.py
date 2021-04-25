@@ -92,6 +92,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                 demo_level_seed = info[0]["level_seed"]
                 valid = False
                 get_new_seed = False
+                tries = 0
                 while not valid:
                     if get_new_seed:
                         demo_level_seed = random.randint(0, int(2147483647))
@@ -115,7 +116,10 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                     else:
                         demo_rollout.reset()
                         demo_env.close()
-                        get_new_seed = True
+                        tries += 1
+                        if tries == 5:
+                            get_new_seed = True
+                            tries = 0
 
         if demo and not multi_demo:
             if controller.learn_from_demos(curr_timestep, params.n_envs, params.n_steps, always_learn=False):
