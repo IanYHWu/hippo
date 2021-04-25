@@ -196,7 +196,6 @@ class MultiDemoStorage:
         self.act_batch = torch.zeros(self.num_envs, self.num_steps)
         self.rew_batch = torch.zeros(self.num_envs, self.num_steps)
         self.done_batch = torch.zeros(self.num_envs, self.num_steps)
-        self.return_batch = torch.zeros(self.num_envs, self.num_steps)
         self.step = 0
 
     def store(self, obs, hidden_state, act, rew, done):
@@ -226,6 +225,7 @@ class MultiDemoStorage:
 
     def _generate_masks(self):
         non_zero_rows = torch.abs(self.done_batch).sum(dim=1) > 0
+        print(non_zero_rows)
         dones = self.done_batch[non_zero_rows]
         dones = dones.cpu()
         done_arr = dones.numpy()
@@ -243,16 +243,10 @@ class MultiDemoStorage:
 
         return mask, non_zero_rows
 
-    def _reshape_batches(self):
-        self.obs_batch = torch.transpose(self.obs_batch, 1, 0)
-        self.hidden_states_batch = torch.transpose(self.hidden_states_batch, 1, 0)
-        self.act_batch = torch.transpose(self.act_batch, 1, 0)
-        self.rew_batch = torch.transpose(self.rew_batch, 1, 0)
-        self.done_batch = torch.transpose(self.done_batch, 1, 0)
-
     def compute_returns(self, gamma=0.99):
         self._remove_cliffhangers()
         G = 0
+        self.return_batch = torch.zeros(len(self.rew_batch), self.num_steps)
         for i in reversed(range(self.num_steps)):
             rew = self.rew_batch[:, i]
             G = rew + gamma * G
@@ -332,6 +326,8 @@ class DemoReplayBuffer:
             self.returns_store = demo_store.return_batch
             self.mask_store = demo_store.mask_batch
             self.max_len = self.mask_store.shape[1]
+
+            demo_store.reset()
 
     @staticmethod
     def _pad_tensor(input_tensor, new_len, pad_trajectory=False):

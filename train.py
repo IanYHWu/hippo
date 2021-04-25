@@ -2,7 +2,6 @@ import torch
 import numpy as np
 import time
 import random
-import matplotlib.pyplot as plt
 
 from common.data_logging import ParamLoader
 from common.data_logging import load_args
@@ -27,16 +26,15 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
     hidden_state = np.zeros((params.n_envs, rollout.hidden_state_size))
     done = np.zeros(params.n_envs)
     start_ = time.time()
-    demo_sum_rewards = []
 
     if params.algo == 'ppo_demo_il' or params.algo == 'ppo_demo_imp_samp':
         demo = True
         if params.demo_multi:
             multi_demo = True
-            print("Using Multiple Demonstrations per rollout")
+            print("Using Multiple Demonstrations")
         else:
             multi_demo = False
-            print("Using Single Demonstrations per rollout")
+            print("Using Single Demonstrations")
         if params.algo == 'ppo_demo_il':
             print("Using Agent - PPO Demo, Imitation Learning Variant")
         else:
@@ -44,19 +42,29 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
         if params.hot_start and not multi_demo:
             print("Hot Start - {} Demonstrations".format(params.hot_start))
             for i in range(0, params.hot_start):
-                demo_level_seed = random.randint(0, int(2147483647))
-                demo_env = load_env(args, params, demo=True, demo_level_seed=demo_level_seed)
-                demo_obs = demo_env.reset()
-                demo_hidden_state = np.zeros((1, rollout.hidden_state_size))
-                demo_done = np.zeros(1)
-                while demo_done[0] == 0:
-                    demo_act, demo_next_hidden_state = demonstrator.predict(demo_obs, demo_hidden_state, demo_done)
-                    demo_next_obs, demo_rew, demo_done, demo_info = demo_env.step(demo_act)
-                    demo_rollout.store(demo_obs, demo_hidden_state, demo_act, demo_rew)
-                    demo_obs = demo_next_obs
-                    demo_hidden_state = demo_next_hidden_state
-                demo_rollout.compute_returns()
-                demo_buffer.store(demo_rollout)
+                valid = False
+                while not valid:
+                    demo_level_seed = random.randint(0, int(2147483647))
+                    step_count = 0
+                    demo_env = load_env(args, params, demo=True, multi_demo=False, demo_level_seed=demo_level_seed)
+                    demo_obs = demo_env.reset()
+                    demo_hidden_state = np.zeros((1, rollout.hidden_state_size))
+                    demo_done = np.zeros(1)
+                    while demo_done[0] == 0:
+                        demo_act, demo_next_hidden_state = demonstrator.predict(demo_obs, demo_hidden_state, demo_done)
+                        demo_next_obs, demo_rew, demo_done, demo_info = demo_env.step(demo_act)
+                        demo_rollout.store(demo_obs, demo_hidden_state, demo_act, demo_rew)
+                        demo_obs = demo_next_obs
+                        demo_hidden_state = demo_next_hidden_state
+                        step_count += 1
+                    if step_count < params.demo_max_steps:
+                        demo_rollout.compute_returns()
+                        demo_buffer.store(demo_rollout)
+                        demo_env.close()
+                        valid = True
+                    else:
+                        demo_rollout.reset()
+                        demo_env.close()
     else:
         demo = False
         multi_demo = False
@@ -82,21 +90,32 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
         if demo and not multi_demo:
             if controller.query_demonstrator(curr_timestep):
                 demo_level_seed = info[0]["level_seed"]
-                demo_env = load_env(args, params, demo=True, multi_demo=False, demo_level_seed=demo_level_seed)
-                demo_obs = demo_env.reset()
-                demo_hidden_state = np.zeros((1, rollout.hidden_state_size))
-                demo_done = np.zeros(1)
-                while demo_done[0] == 0:
-                    demo_act, demo_next_hidden_state = demonstrator.predict(demo_obs, demo_hidden_state, demo_done)
-                    demo_next_obs, demo_rew, demo_done, demo_info = demo_env.step(demo_act)
-                    demo_rollout.store(demo_obs, demo_hidden_state, demo_act, demo_rew)
-                    demo_obs = demo_next_obs
-                    demo_hidden_state = demo_next_hidden_state
-                demo_rollout.compute_returns()
-                demo_sum_reward = demo_rollout.get_sum_rewards()
-                demo_sum_rewards.append(demo_sum_reward)
-                demo_buffer.store(demo_rollout)
-                demo_env.close()
+                valid = False
+                get_new_seed = False
+                while not valid:
+                    if get_new_seed:
+                        demo_level_seed = random.randint(0, int(2147483647))
+                    step_count = 0
+                    demo_env = load_env(args, params, demo=True, multi_demo=False, demo_level_seed=demo_level_seed)
+                    demo_obs = demo_env.reset()
+                    demo_hidden_state = np.zeros((1, rollout.hidden_state_size))
+                    demo_done = np.zeros(1)
+                    while demo_done[0] == 0:
+                        demo_act, demo_next_hidden_state = demonstrator.predict(demo_obs, demo_hidden_state, demo_done)
+                        demo_next_obs, demo_rew, demo_done, demo_info = demo_env.step(demo_act)
+                        demo_rollout.store(demo_obs, demo_hidden_state, demo_act, demo_rew)
+                        demo_obs = demo_next_obs
+                        demo_hidden_state = demo_next_hidden_state
+                        step_count += 1
+                    if step_count < params.demo_max_steps:
+                        demo_rollout.compute_returns()
+                        demo_buffer.store(demo_rollout)
+                        demo_env.close()
+                        valid = True
+                    else:
+                        demo_rollout.reset()
+                        demo_env.close()
+                        get_new_seed = True
 
         if demo and not multi_demo:
             if controller.learn_from_demos(curr_timestep, params.n_envs, params.n_steps, always_learn=False):
@@ -109,15 +128,12 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                 demo_obs = demo_env.reset()
                 demo_hidden_state = np.zeros((params.n_envs, rollout.hidden_state_size))
                 demo_done = np.zeros(params.n_envs)
-                printed = False
                 for step in range(params.demo_multi_steps):
                     demo_act, demo_next_hidden_state = demonstrator.predict(demo_obs, demo_hidden_state, demo_done)
                     demo_next_obs, demo_rew, demo_done, demo_info = demo_env.step(demo_act)
                     demo_rollout.store(demo_obs, demo_hidden_state, demo_act, demo_rew, demo_done)
                     demo_obs = demo_next_obs
                     demo_hidden_state = demo_next_hidden_state
-                    if not printed:
-                        printed = True
                 demo_rollout.compute_returns()
                 demo_buffer.store(demo_rollout)
                 demo_env.close()

@@ -109,11 +109,12 @@ tiny_demo_imp_samp:
     demo_sampling_strategy: prioritised
     demo_entropy_coef: 0.01
     demo_value_coef: 0.005
+    demo_max_steps: 256
     demo_multi: False
 
 tiny_demo_imp_samp_multi:
     n_envs: 2
-    n_steps: 256
+    n_steps: 16
     n_checkpoints: 2
     epoch: 3
     mini_batch_per_epoch: 8
@@ -135,7 +136,7 @@ tiny_demo_imp_samp_multi:
     demo_coef: 0.5
     demo_learning_rate: 0.0005
     demo_batch_size: 64
-    demo_mini_batch_size: 64
+    demo_mini_batch_size: 32
     demo_epochs: 10
     hot_start: 10
     buffer_max_samples: 100
@@ -146,5 +147,5 @@ tiny_demo_imp_samp_multi:
     demo_entropy_coef: 0.01
     demo_value_coef: 0.005
     demo_multi: True
-    demo_multi_steps: 1024
+    demo_multi_steps: 256
 
