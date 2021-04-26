@@ -4,7 +4,7 @@ import torch.optim as optim
 import numpy as np
 
 
-class PPODemoImpSamp(PPO):
+class PPODemoHIPPO(PPO):
 
     def __init__(self,
                  env,
@@ -31,7 +31,8 @@ class PPODemoImpSamp(PPO):
                  demo_epochs=3,
                  demo_sampling_strategy='uniform',
                  demo_value_coef=0.05,
-                 demo_entropy_coef=0.01):
+                 demo_entropy_coef=0.01,
+                 demo_normalise_adv=False):
 
         super().__init__(env, actor_critic, storage, device)
 
@@ -50,7 +51,6 @@ class PPODemoImpSamp(PPO):
         self.lmbda = lmbda
         self.normalise_adv = normalise_adv
         self.demo_buffer = demo_buffer
-        # self.demo_optimizer = optim.Adam(self.actor_critic.parameters(), lr=demo_learning_rate, eps=1e-5)
         self.demo_learning_rate = demo_learning_rate
         self.demo_mini_batch_size = demo_mini_batch_size
         self.demo_epochs = demo_epochs
@@ -58,30 +58,34 @@ class PPODemoImpSamp(PPO):
         self.demo_sampling_strategy = demo_sampling_strategy
         self.demo_value_coef = demo_value_coef
         self.demo_entropy_coef = demo_entropy_coef
+        self.demo_normalise_adv = demo_normalise_adv
 
     def demo_optimize(self):
+        """Learn from samples in the the demonstrations replay buffer"""
         pi_loss_list, value_loss_list, entropy_loss_list = [], [], []
         n_valid_transitions = self.demo_buffer.get_n_valid_transitions()
         batch_size = self.demo_batch_size
+        # the batch size must be <= than the number of non-padding transitions in the trajectory
         if n_valid_transitions < batch_size:
             batch_size = n_valid_transitions
         mini_batch_size = self.demo_mini_batch_size
-
+        # the mini-batch size must be <= the batch size
         if batch_size < mini_batch_size:
             mini_batch_size = batch_size
         grad_accumulation_steps = batch_size / mini_batch_size
         grad_accumulation_count = 1
 
-        self.demo_buffer.compute_imp_samp_advantages(self.actor_critic, gamma=self.gamma,
-                                                     lmbda=self.lmbda, normalise_adv=self.normalise_adv)
+        # compute the advantages, the values and the action logits of the trajectories under the current AC
+        self.demo_buffer.compute_hippo_advantages(self.actor_critic, gamma=self.gamma,
+                                                  lmbda=self.lmbda, normalise_adv=self.demo_normalise_adv)
 
         self.actor_critic.train()
         for e in range(self.demo_epochs):
             recurrent = self.actor_critic.is_recurrent()
-            generator = self.demo_buffer.imp_samp_demo_generator(batch_size=batch_size,
-                                                                 mini_batch_size=mini_batch_size,
-                                                                 recurrent=recurrent,
-                                                                 sample_method=self.demo_sampling_strategy)
+            generator = self.demo_buffer.hippo_demo_generator(batch_size=batch_size,
+                                                              mini_batch_size=mini_batch_size,
+                                                              recurrent=recurrent,
+                                                              sample_method=self.demo_sampling_strategy)
             for sample in generator:
                 obs_batch, hidden_state_batch, act_batch, return_batch, mask_batch, old_log_prob_act_batch, \
                 old_value_batch, adv_batch = sample
@@ -106,6 +110,7 @@ class PPODemoImpSamp(PPO):
                 loss = pi_loss + self.demo_value_coef * value_loss - self.demo_entropy_coef * entropy_loss
                 loss.backward()
 
+                # accumulate gradients before performing gradient descent
                 if grad_accumulation_count % grad_accumulation_steps == 0:
                     torch.nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.grad_clip_norm)
                     self.optimizer.step()
@@ -142,6 +147,7 @@ def get_args_demo_imp_samp(params):
                   'demo_batch_size': params.demo_batch_size,
                   'demo_sampling_strategy': params.demo_sampling_strategy,
                   'demo_value_coef': params.demo_value_coef,
-                  'demo_entropy_coef': params.demo_entropy_coef}
+                  'demo_entropy_coef': params.demo_entropy_coef,
+                  'demo_normalise_adv': params.demo_normalise_adv}
 
     return param_dict

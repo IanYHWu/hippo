@@ -75,7 +75,7 @@ tiny_demo_il:
     demo_learn_ratio: 0.1
     demo_multi: False
 
-tiny_demo_imp_samp:
+tiny_demo_hippo:
     n_envs: 2
     n_steps: 16
     n_checkpoints: 2
@@ -92,7 +92,7 @@ tiny_demo_imp_samp:
     normalise_adv: True
     normalise_reward: True
     use_gae: True
-    algo: ppo_demo_imp_samp
+    algo: ppo_demo_hippo
     architecture: ResNet
     recurrent: False
     hidden_size: 256
@@ -111,8 +111,9 @@ tiny_demo_imp_samp:
     demo_value_coef: 0.005
     demo_max_steps: 256
     demo_multi: False
+    demo_normalise_adv: False
 
-tiny_demo_imp_samp_multi:
+tiny_demo_hippo_multi:
     n_envs: 2
     n_steps: 16
     n_checkpoints: 2
@@ -129,7 +130,7 @@ tiny_demo_imp_samp_multi:
     normalise_adv: True
     normalise_reward: True
     use_gae: True
-    algo: ppo_demo_imp_samp
+    algo: ppo_demo_hippo
     architecture: ResNet
     recurrent: False
     hidden_size: 256

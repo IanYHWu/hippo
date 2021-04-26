@@ -5,6 +5,7 @@ from collections import deque
 
 
 class Storage:
+    """Rollout storage for regular PPO trajectories"""
 
     def __init__(self, obs_shape, hidden_state_size, num_steps, num_envs, device):
         self.obs_shape = obs_shape
@@ -28,6 +29,7 @@ class Storage:
         self.step = 0
 
     def store(self, obs, hidden_state, act, rew, done, info, log_prob_act, value):
+        """Store results in the rollout buffer incrementally"""
         self.obs_batch[self.step] = torch.from_numpy(obs.copy())
         self.hidden_states_batch[self.step] = torch.from_numpy(hidden_state.copy())
         self.act_batch[self.step] = torch.from_numpy(act.copy())
@@ -40,13 +42,16 @@ class Storage:
         self.step = (self.step + 1) % self.num_steps
 
     def store_last(self, last_obs, last_hidden_state, last_value):
+        """Store data for the t+1th step. Used for computing advantages and returns"""
         self.obs_batch[-1] = torch.from_numpy(last_obs.copy())
         self.hidden_states_batch[-1] = torch.from_numpy(last_hidden_state.copy())
         self.value_batch[-1] = torch.from_numpy(last_value.copy())
 
     def compute_estimates(self, gamma=0.99, lmbda=0.95, use_gae=True, normalize_adv=True):
+        """Compute returns and advantages"""
         rew_batch = self.rew_batch
         if use_gae:
+            # generalised advantage estimation
             A = 0
             for i in reversed(range(self.num_steps)):
                 rew = rew_batch[i]
@@ -58,7 +63,7 @@ class Storage:
                 self.adv_batch[i] = A = gamma * lmbda * A * (1 - done) + delta
                 self.return_batch[i] = self.adv_batch[i] + self.value_batch[i]
         else:
-            G = self.value_batch[-1]
+            G = self.value_batch[-1]  # t+1th value
             for i in reversed(range(self.num_steps)):
                 rew = rew_batch[i]
                 done = self.done_batch[i]
@@ -67,9 +72,11 @@ class Storage:
                 self.return_batch[i] = G
 
         if normalize_adv:
+            # normalise the advantages (as used in Kostrikov's implementation)
             self.adv_batch = (self.adv_batch - torch.mean(self.adv_batch)) / (torch.std(self.adv_batch) + 1e-8)
 
     def fetch_train_generator(self, mini_batch_size=None, recurrent=False):
+        """Create genertors that sample from the rollout buffer"""
         batch_size = self.num_steps * self.num_envs
         if mini_batch_size is None:
             mini_batch_size = batch_size
@@ -90,7 +97,7 @@ class Storage:
                 return_batch = torch.FloatTensor(self.return_batch).reshape(-1)[indices].to(self.device)
                 adv_batch = torch.FloatTensor(self.adv_batch).reshape(-1)[indices].to(self.device)
                 yield obs_batch, hidden_state_batch, act_batch, done_batch, log_prob_act_batch, value_batch, return_batch, adv_batch
-        # If agent's policy is recurrent, data should be sampled along the time-horizon
+        # If agent's policy is recurrent, sample data along the time-horizon (not used in this project so far)
         else:
             num_mini_batch_per_epoch = batch_size // mini_batch_size
             num_envs_per_batch = self.num_envs // num_mini_batch_per_epoch
@@ -110,6 +117,7 @@ class Storage:
                 yield obs_batch, hidden_state_batch, act_batch, done_batch, log_prob_act_batch, value_batch, return_batch, adv_batch
 
     def fetch_log_data(self):
+        """Extract rewards from info - to be sent to the logger"""
         if 'env_reward' in self.info_batch[0][0]:
             rew_batch = []
             for step in range(self.num_steps):
@@ -131,12 +139,14 @@ class Storage:
 
 
 class DemoStorage:
+    """Storage for single demonstration trajectories (demo_multi = False)"""
 
     def __init__(self, device):
         self.device = device
         self.reset()
 
     def reset(self):
+        """Reset the storage. Uses lists for storage because trajectory lengths vary"""
         self.obs_store = []
         self.hidden_states_store = []
         self.act_store = []
@@ -145,29 +155,29 @@ class DemoStorage:
         self.trajectory_length = 0
 
     def store(self, obs, hidden_state, act, rew):
+        """Insert trajectory data in the demo store"""
         self.obs_store.append(torch.from_numpy(obs.copy()))
         self.hidden_states_store.append(torch.from_numpy(hidden_state.copy()))
         self.act_store.append(torch.from_numpy(act.copy()))
         self.rew_store.append(torch.from_numpy(rew.copy()))
 
-        self.trajectory_length += 1
-
-    def store_last(self, last_obs, last_hidden_state):
-        self.obs_store.append(torch.from_numpy(last_obs.copy()))
-        self.hidden_states_store.append(torch.from_numpy(last_hidden_state.copy()))
+        self.trajectory_length += 1  # track the current trajectory length
 
     @staticmethod
     def _list_to_tensor(list_of_tensors):
+        """Convert list of tensors to tensor"""
         big_tensor = torch.stack(list_of_tensors)
         return big_tensor
 
     def _stores_to_tensors(self):
+        """Convert data to tensor form"""
         self.obs_store = self._list_to_tensor(self.obs_store)
         self.hidden_states_store = self._list_to_tensor(self.hidden_states_store)
         self.act_store = self._list_to_tensor(self.act_store)
         self.rew_store = self._list_to_tensor(self.rew_store)
 
     def compute_returns(self, gamma=0.99):
+        """Compute the returns"""
         self._stores_to_tensors()
         self.returns_store = torch.zeros(self.trajectory_length)
         G = 0
@@ -181,6 +191,9 @@ class DemoStorage:
 
 
 class MultiDemoStorage:
+    """Storage for multiple demonstration trajectories - used when multiple demonstrations are generated by multiple
+       oracle rollouts (demo_multi = True)
+    """
 
     def __init__(self, obs_shape, hidden_state_size, num_steps, num_envs, device):
         self.obs_shape = obs_shape
@@ -199,16 +212,18 @@ class MultiDemoStorage:
         self.step = 0
 
     def store(self, obs, hidden_state, act, rew, done):
+        """Insert demonstration trajectories"""
         self.obs_batch[:, self.step] = torch.from_numpy(obs.copy())
         self.hidden_states_batch[:, self.step] = torch.from_numpy(hidden_state.copy())
         self.act_batch[:, self.step] = torch.from_numpy(act.copy())
         self.rew_batch[:, self.step] = torch.from_numpy(rew.copy())
         self.done_batch[:, self.step] = torch.from_numpy(done.copy())
-
         self.step = (self.step + 1) % self.num_steps
 
     @staticmethod
     def _remove_cliffhangers_helper(input_tensor, mask, non_zero_rows):
+        """Helper function to remove cliffhanger trajectories. Removes non-terminating episodes,
+        and masks any unwanted transitions"""
         non_zero_tensor = input_tensor[non_zero_rows]
         shapes = len(non_zero_tensor.shape[2:])
         for i in range(0, shapes):
@@ -217,6 +232,7 @@ class MultiDemoStorage:
         return non_zero_tensor * mask
 
     def _remove_cliffhangers(self):
+        """Remove cliffhanger trajectories"""
         mask, non_zero_rows = self._generate_masks()
         self.obs_batch = self._remove_cliffhangers_helper(self.obs_batch, mask, non_zero_rows)
         self.hidden_states_batch = self._remove_cliffhangers_helper(self.hidden_states_batch, mask, non_zero_rows)
@@ -224,12 +240,23 @@ class MultiDemoStorage:
         self.rew_batch = self._remove_cliffhangers_helper(self.rew_batch, mask, non_zero_rows)
 
     def _generate_masks(self):
-        non_zero_rows = torch.abs(self.done_batch).sum(dim=1) > 0
-        print(non_zero_rows)
-        dones = self.done_batch[non_zero_rows]
+        """Masks unwanted transitions (i.e. transitions from additional episodes and non-terminating transitions).
+           Generates the correct masks, and the indices of the samples to keep"""
+
+        # EXAMPLE: done_batch = [[0, 0, 0, 1, 0],
+        #                        [0, 0, 0, 0, 0],  # remove non-terminating transitions
+        #                        [0, 0, 1, 0, 1]]  # only keep the first episode
+        # ----->   mask =       [[1, 1, 1, 1, 0],
+        #                        [1, 1, 1, 0, 0]]
+        # ----->   non_zero_rows = [0, 2]
+
+        non_zero_rows = torch.abs(self.done_batch).sum(dim=1) > 0  # find trajectories that terminate in time
+        dones = self.done_batch[non_zero_rows]  # get the done data for only those trajectories
         dones = dones.cpu()
         done_arr = dones.numpy()
-        one_dones = np.argwhere(done_arr == 1)
+        one_dones = np.argwhere(done_arr == 1)  # find the ends of the first episodes for each terminating env
+
+        # the rest of this code is used to generate the masking array
         batch_size, tensor_len = done_arr.shape
         t_len_arr = np.vstack((np.arange(batch_size), np.ones(batch_size) * tensor_len)).T
         comb_arr = np.concatenate((one_dones, t_len_arr))
@@ -244,6 +271,7 @@ class MultiDemoStorage:
         return mask, non_zero_rows
 
     def compute_returns(self, gamma=0.99):
+        """Remove cliffhangers and then compute the returns"""
         self._remove_cliffhangers()
         G = 0
         self.return_batch = torch.zeros(len(self.rew_batch), self.num_steps)
@@ -254,6 +282,7 @@ class MultiDemoStorage:
 
 
 class DemoReplayBuffer:
+    """Demonstration replay buffer. Used for both demo_multi = True and demo_multi = False"""
 
     def __init__(self, obs_size, hidden_state_size, device, max_samples):
         self.obs_size = obs_size
@@ -263,19 +292,32 @@ class DemoReplayBuffer:
         self.max_samples = max_samples
 
     def store(self, demo_store):
-
+        """Extract data from demo_store and store in the replay buffer"""
         if isinstance(demo_store, DemoStorage):
+            # for demo_multi = False i.e. we sample single demonstrations from the oracle each time
+            # Extract the single trajectory
             obs = demo_store.obs_store
             hidden_states = demo_store.hidden_states_store
             actions = demo_store.act_store
             rewards = demo_store.rew_store
             trajectory_len = demo_store.trajectory_length
             returns = demo_store.returns_store.reshape(trajectory_len, 1)
-            demo_store.reset()
+            demo_store.reset()  # reset the demo_store after we extract the data from it
 
-            mask = torch.ones(trajectory_len).reshape(trajectory_len, 1)
+            mask = torch.ones(trajectory_len).reshape(trajectory_len, 1)  # generate mask of ones, of trajectory length
+
+            # EXAMPLE (for demo_multi = False):
+            # Trajectory: [3, 2, 4]
+            # Buffer: [[4, 5, 3, 7, 0], ----> [[3, 2, 4, 0, 0],
+            #          [3, 2, 7, 8, 6]]        [4, 5, 3, 7, 0],
+            #                                  [3, 2, 7, 8, 6]]
+            #
+            # Trajectory: [5, 2, 4, 7, 8]
+            # Buffer: [[3, 2, 4]] ----> [[5, 2, 4, 7, 8],
+            #                            [3, 2, 4, 0, 0]]
 
             if self.max_len == 0:
+                # if this is the first trajectory to be stored, just store it
                 self.obs_store = obs.unsqueeze(0)
                 self.hidden_states_store = hidden_states.unsqueeze(0)
                 self.act_store = actions.unsqueeze(0)
@@ -284,24 +326,30 @@ class DemoReplayBuffer:
                 self.mask_store = mask.unsqueeze(0)
                 self.max_len = trajectory_len
             else:
+                # if not, we need to pad the trajectory or the buffer, because trajectories can be of different lengths
                 if trajectory_len < self.max_len:
+                    # if the trajectory is smaller than the max length trajectory seen so far, pad the trajectory
                     obs = self._pad_tensor(obs, self.max_len, pad_trajectory=True)
                     hidden_states = self._pad_tensor(hidden_states, self.max_len, pad_trajectory=True)
                     actions = self._pad_tensor(actions, self.max_len, pad_trajectory=True)
                     returns = self._pad_tensor(returns, self.max_len, pad_trajectory=True)
                     rewards = self._pad_tensor(rewards, self.max_len, pad_trajectory=True)
+                    # pad the trajectory mask with zeros
                     mask = self._pad_tensor(mask, self.max_len, pad_trajectory=True)
 
                 elif trajectory_len > self.max_len:
+                    # if the trajectory is longer than the max length trajectory so far, pad the buffer
                     self.obs_store = self._pad_tensor(self.obs_store, trajectory_len, pad_trajectory=False)
                     self.hidden_states_store = self._pad_tensor(self.hidden_states_store, trajectory_len,
                                                                 pad_trajectory=False)
                     self.act_store = self._pad_tensor(self.act_store, trajectory_len, pad_trajectory=False)
                     self.returns_store = self._pad_tensor(self.returns_store, trajectory_len, pad_trajectory=False)
                     self.rew_store = self._pad_tensor(self.rew_store, trajectory_len, pad_trajectory=False)
+                    # pad the buffer mask with zeros
                     self.mask_store = self._pad_tensor(self.mask_store, trajectory_len, pad_trajectory=False)
                     self.max_len = trajectory_len
 
+                # add the new trajectory to the replay buffer
                 self.obs_store = self._add_to_buffer(obs, self.obs_store)
                 self.hidden_states_store = self._add_to_buffer(hidden_states, self.hidden_states_store)
                 self.act_store = self._add_to_buffer(actions, self.act_store)
@@ -309,6 +357,7 @@ class DemoReplayBuffer:
                 self.rew_store = self._add_to_buffer(rewards, self.rew_store)
                 self.mask_store = self._add_to_buffer(mask, self.mask_store)
 
+            # if the capacity of the buffer is full, remove the oldest trajectory
             n_samples = self.get_buffer_n_samples()
             if n_samples > self.max_samples:
                 self.obs_store = self.obs_store[:-1, :]
@@ -319,6 +368,7 @@ class DemoReplayBuffer:
                 self.mask_store = self.mask_store[:-1, :]
 
         else:
+            # if demo_multi = True, we just directly store the data
             self.obs_store = demo_store.obs_batch
             self.hidden_states_store = demo_store.hidden_states_batch
             self.act_store = demo_store.act_batch
@@ -327,10 +377,11 @@ class DemoReplayBuffer:
             self.mask_store = demo_store.mask_batch
             self.max_len = self.mask_store.shape[1]
 
-            demo_store.reset()
+            demo_store.reset()  # reset the demo_store after we extract data from it
 
     @staticmethod
     def _pad_tensor(input_tensor, new_len, pad_trajectory=False):
+        """Pad a tensor with zeros or zero-tensors"""
         height = input_tensor.shape[0]
         width = input_tensor.shape[1]
 
@@ -352,15 +403,18 @@ class DemoReplayBuffer:
 
     @staticmethod
     def _add_to_buffer(trajectory, buffer):
+        """Add a trajectory to the buffer"""
         new_buffer = torch.cat((trajectory.unsqueeze(0), buffer), dim=0)
         return new_buffer
 
     @staticmethod
     def _list_to_tensor(list_of_tensors):
+        """Convert a list of tensors into a tensor"""
         big_tensor = torch.stack(list_of_tensors)
         return big_tensor
 
     def il_demo_generator(self, batch_size, mini_batch_size, sample_method='uniform', recurrent=False):
+        """Create generator to sample transitions from the replay buffer - used for Imitation Learning"""
         if not recurrent:
             if sample_method == 'uniform':
                 sampler = BatchSampler(SubsetRandomSampler(range(batch_size)),
@@ -381,13 +435,17 @@ class DemoReplayBuffer:
             raise NotImplementedError
 
     def get_n_valid_transitions(self):
+        """Count the number of non-padding transitions stored in the buffer"""
         valid_samples = torch.count_nonzero(self.mask_store)
         return valid_samples
 
     def get_buffer_n_samples(self):
+        """Count the number of trajectories in the buffer"""
         return len(self.act_store)
 
     def _compute_pi_v(self, actor_critic):
+        """Compute and store action logits and values for all transitions in the buffer using an actor critic -
+        used for HIPPO"""
         log_prob_act_list = []
         val_list = []
         with torch.no_grad():
@@ -399,12 +457,15 @@ class DemoReplayBuffer:
                 val_list.append(val_batch)
                 log_prob_act_list.append(log_prob_act_batch)
             self.value_store = self._list_to_tensor(val_list).cpu()
-            self.value_store *= self.mask_store.squeeze(-1)
+            self.value_store *= self.mask_store.squeeze(-1)  # set padding values to zero using the mask
             self.log_prob_act_store = self._list_to_tensor(log_prob_act_list).cpu()
 
-    def compute_imp_samp_advantages(self, actor_critic, gamma=0.99, lmbda=0.95, normalise_adv=True):
+    def compute_hippo_advantages(self, actor_critic, gamma=0.99, lmbda=0.95, normalise_adv=True):
+        """Compute the advantages of the transitions - used for HIPPO"""
         self._compute_pi_v(actor_critic)
         adv_list = []
+        # can easily vectorise this - will do at some point
+        # padding
         for sample in range(0, len(self.act_store)):
             adv_store = torch.zeros(self.max_len)
             A = 0
@@ -423,24 +484,28 @@ class DemoReplayBuffer:
         self.adv_store = self._list_to_tensor(adv_list)
 
         if normalise_adv:
+            # when we normalise the advantages, we need to account for the fact that some transitions are paddings.
             adv_mean = torch.sum(self.adv_store) / (self.get_n_valid_transitions() + 1e-8)
             mean_sq = torch.sum(self.adv_store ** 2) / (self.get_n_valid_transitions() + 1e-8)
             sq_mean = adv_mean ** 2
-            adv_std = torch.sqrt(mean_sq - sq_mean + 1e-8)
+            adv_std = torch.sqrt(mean_sq - sq_mean + 1e-8)  # variance is mean of the square - square of the mean
             self.adv_store = (self.adv_store - adv_mean) / adv_std
 
-    def imp_samp_demo_generator(self, batch_size, mini_batch_size, recurrent=False, sample_method='uniform'):
+    def hippo_demo_generator(self, batch_size, mini_batch_size, recurrent=False, sample_method='uniform'):
+        """Create generator to sample transitions from the replay buffer - used for HIPPO"""
         if not recurrent:
-            mask_weights = self.mask_store.squeeze(-1).reshape(-1)
+            mask_weights = self.mask_store.squeeze(-1).reshape(-1)  # ignore all padding transitions when sampling
             if sample_method == 'uniform':
                 weights = mask_weights
                 sampler = BatchSampler(WeightedRandomSampler(weights, batch_size, replacement=False), mini_batch_size,
                                        drop_last=True)
             elif sample_method == 'prioritised':
+                # prioritise transitions with large |R - V_theta|
                 weights = mask_weights * torch.abs(self.returns_store.reshape(-1) - self.value_store.reshape(-1))
                 sampler = BatchSampler(WeightedRandomSampler(weights, batch_size, replacement=False), mini_batch_size,
                                        drop_last=True)
             elif sample_method == 'prioritised_clamp':
+                # weight transitions with max(0, R - V_theta)
                 weights = mask_weights * torch.clamp(self.returns_store.reshape(-1) - self.value_store.reshape(-1),
                                                      min=0)
                 sampler = BatchSampler(WeightedRandomSampler(weights, batch_size, replacement=False), mini_batch_size,

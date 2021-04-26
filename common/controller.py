@@ -1,5 +1,6 @@
 
 class DemoScheduler:
+    """Demonstration Scheduler - used for set schedules for querying and learning"""
 
     def __init__(self, args, params):
         self.num_timesteps = args.num_timesteps
@@ -16,12 +17,14 @@ class DemoScheduler:
             self.buffer_empty = True
 
     def query_demonstrator(self, curr_timestep):
+        """Get a trajectory from the demonstrator"""
         if self.demo_schedule == 'linear':
             return self._linear_schedule(curr_timestep)
         else:
             raise NotImplementedError
 
     def learn_from_demos(self, curr_timestep, n_envs, n_steps, always_learn=False):
+        """Learn from the replay buffer"""
         if always_learn:
             return True
         learn_every = (1 / self.demo_learn_ratio) * n_envs * n_steps
@@ -35,6 +38,7 @@ class DemoScheduler:
                 return False
 
     def _linear_schedule(self, curr_timestep):
+        """Linear Scheduler"""
         demo_every = self.num_timesteps // self.num_demos
         if curr_timestep > ((self.query_count + 1) * demo_every):
             self.buffer_empty = False
