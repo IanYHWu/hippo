@@ -63,8 +63,10 @@ class DemoLRScheduler:
 
         if not self.schedule_type:
             self.schedule = None
-        elif self.schedule_type == 'linear':
+        elif self.schedule_type == 'linear_inc':
             self._generate_linear_schedule(0.0002, 0.0008)
+        elif self.schedule_type == 'linear_dec':
+            self._generate_linear_schedule(0.0008, 0.0002)
         else:
             raise NotImplementedError
 
