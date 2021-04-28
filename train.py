@@ -7,7 +7,7 @@ from common.data_logging import ParamLoader
 from common.data_logging import load_args
 from common.loaders import load_env, load_model, load_agent
 from common.arguments import parser
-from common.utils import set_global_log_levels, set_global_seeds, extract_seeds
+from common.utils import set_global_log_levels, set_global_seeds, extract_seeds, DemoLRScheduler
 from common.data_logging import Logger
 from common.storage import Storage
 from common.storage import DemoStorage, MultiDemoStorage
@@ -32,6 +32,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
 
     if params.algo == 'ppo_demo_il' or params.algo == 'ppo_demo_hippo':
         demo = True
+        demo_lr_scheduler = DemoLRScheduler(args, params)
         if params.demo_multi:
             multi_demo = True
             print("Using Multiple Demonstrations")
@@ -74,6 +75,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
     else:
         demo = False
         multi_demo = False
+        demo_lr_scheduler = None
         print("Using Agent - Vanilla PPO")
 
     print("Now training...")
@@ -137,7 +139,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
         # learning from single demo trajectories - optimise from the demonstrations
         if demo and not multi_demo:
             if controller.learn_from_demos(curr_timestep, params.n_envs, params.n_steps, always_learn=False):
-                summary = agent.demo_optimize()
+                summary = agent.demo_optimize(demo_lr_scheduler)
 
         # learning from multiple demo trajectories - gather the trajectories and optimise
         if demo and multi_demo:
@@ -158,7 +160,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                 demo_buffer.store(demo_rollout)
                 demo_env.close()
 
-                summary = agent.demo_optimize()
+                summary = agent.demo_optimize(demo_lr_scheduler)
 
         curr_timestep += params.n_steps * params.n_envs
         rew_batch, done_batch = rollout.fetch_log_data()  # fetch rewards and done data from the rollout

@@ -60,7 +60,7 @@ class PPODemoHIPPO(PPO):
         self.demo_entropy_coef = demo_entropy_coef
         self.demo_normalise_adv = demo_normalise_adv
 
-    def demo_optimize(self):
+    def demo_optimize(self, lr_schedule):
         """Learn from samples in the the demonstrations replay buffer"""
         pi_loss_list, value_loss_list, entropy_loss_list = [], [], []
         n_valid_transitions = self.demo_buffer.get_n_valid_transitions()
@@ -74,6 +74,11 @@ class PPODemoHIPPO(PPO):
             mini_batch_size = batch_size
         grad_accumulation_steps = batch_size / mini_batch_size
         grad_accumulation_count = 1
+
+        lr = lr_schedule.get_lr()
+        if lr is None:
+            lr = self.demo_learning_rate
+        demo_optimizer = optim.Adam(self.actor_critic.parameters(), lr=lr, eps=1e-5)
 
         # compute the advantages, the values and the action logits of the trajectories under the current AC
         self.demo_buffer.compute_hippo_advantages(self.actor_critic, gamma=self.gamma,
@@ -113,8 +118,8 @@ class PPODemoHIPPO(PPO):
                 # accumulate gradients before performing gradient descent
                 if grad_accumulation_count % grad_accumulation_steps == 0:
                     torch.nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.grad_clip_norm)
-                    self.optimizer.step()
-                    self.optimizer.zero_grad()
+                    demo_optimizer.step()
+                    demo_optimizer.zero_grad()
                 grad_accumulation_count += 1
                 pi_loss_list.append(pi_loss.item())
                 value_loss_list.append(value_loss.item())
@@ -127,7 +132,7 @@ class PPODemoHIPPO(PPO):
         return summary
 
 
-def get_args_demo_imp_samp(params):
+def get_args_demo_hippo(params):
     param_dict = {'n_steps': params.n_steps,
                   'n_envs': params.n_envs,
                   'epoch': params.epoch,

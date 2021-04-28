@@ -2,6 +2,7 @@ import numpy as np
 import gym
 import torch.nn as nn
 import torch
+import math
 
 
 def set_global_log_levels(level):
@@ -47,4 +48,42 @@ def get_n_params(model):
 def extract_seeds(info):
     seeds_list = [d['level_seed'] for d in info]
     return seeds_list
+
+
+class DemoLRScheduler:
+
+    def __init__(self, args, params):
+        self.schedule_type = params.demo_lr_schedule
+        self.demo_learn_ratio = params.demo_learn_ratio
+        self.num_timesteps = args.num_timesteps
+        self.params = params
+        self.args = args
+
+        self.i = 0
+
+        if not self.schedule_type:
+            self.schedule = None
+        elif self.schedule_type == 'linear':
+            self._generate_linear_schedule(0.0002, 0.0008)
+        else:
+            raise NotImplementedError
+
+    def _generate_linear_schedule(self, start_rate, end_rate):
+        learn_every = self.params.n_envs * self.params.n_steps * (1 / self.demo_learn_ratio)
+        num_learn_steps = math.ceil(self.num_timesteps / learn_every)
+        self.schedule = np.linspace(start_rate, end_rate, num_learn_steps)
+
+    def get_lr(self):
+        if self.schedule is None:
+            return None
+        else:
+            lr = self.schedule[self.i]
+            self.i += 1
+            return lr
+
+
+
+
+
+
 

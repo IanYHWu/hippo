@@ -112,6 +112,7 @@ tiny_demo_hippo:
     demo_max_steps: 256
     demo_multi: False
     demo_normalise_adv: False
+    demo_lr_schedule: linear
 
 tiny_demo_hippo_multi:
     n_envs: 2
