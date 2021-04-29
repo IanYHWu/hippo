@@ -284,15 +284,40 @@ class MultiDemoStorage:
 class DemoReplayBuffer:
     """Demonstration replay buffer. Used for both demo_multi = True and demo_multi = False"""
 
-    def __init__(self, obs_size, hidden_state_size, device, max_samples):
+    def __init__(self, obs_size, hidden_state_size, device, max_samples, sampling_strategy='uniform', alpha=1.0,
+                 beta=0.6, eps=1e-5, mode='hippo'):
         self.obs_size = obs_size
         self.hidden_state_size = hidden_state_size
         self.max_len = 0
         self.device = device
         self.max_samples = max_samples
+        self.sampling_strategy = sampling_strategy
+        self.mode = mode
+        if sampling_strategy == 'prioritised' or sampling_strategy == 'prioritised_clamp':
+            self.prioritised = True
+        else:
+            self.prioritised = False
+
+        if self.prioritised:
+            self.max_priority = 1
+            self.alpha = alpha
+            self.beta = beta
+            self.eps = eps
+            self.last_updated_indices = []
 
     def store(self, demo_store):
         """Extract data from demo_store and store in the replay buffer"""
+
+        # EXAMPLE (for demo_multi = False):
+        # Trajectory: [3, 2, 4]
+        # Buffer: [[4, 5, 3, 7, 0], ----> [[3, 2, 4, 0, 0],
+        #          [3, 2, 7, 8, 6]]        [4, 5, 3, 7, 0],
+        #                                  [3, 2, 7, 8, 6]]
+        #
+        # Trajectory: [5, 2, 4, 7, 8]
+        # Buffer: [[3, 2, 4]] ----> [[5, 2, 4, 7, 8],
+        #                            [3, 2, 4, 0, 0]]
+
         if isinstance(demo_store, DemoStorage):
             # for demo_multi = False i.e. we sample single demonstrations from the oracle each time
             # Extract the single trajectory
@@ -306,15 +331,10 @@ class DemoReplayBuffer:
 
             mask = torch.ones(trajectory_len).reshape(trajectory_len, 1)  # generate mask of ones, of trajectory length
 
-            # EXAMPLE (for demo_multi = False):
-            # Trajectory: [3, 2, 4]
-            # Buffer: [[4, 5, 3, 7, 0], ----> [[3, 2, 4, 0, 0],
-            #          [3, 2, 7, 8, 6]]        [4, 5, 3, 7, 0],
-            #                                  [3, 2, 7, 8, 6]]
-            #
-            # Trajectory: [5, 2, 4, 7, 8]
-            # Buffer: [[3, 2, 4]] ----> [[5, 2, 4, 7, 8],
-            #                            [3, 2, 4, 0, 0]]
+            if self.prioritised and self.mode == 'il':
+                priorities = torch.ones(trajectory_len).reshape(trajectory_len, 1) * self.max_priority
+            else:
+                priorities = None
 
             if self.max_len == 0:
                 # if this is the first trajectory to be stored, just store it
@@ -325,6 +345,10 @@ class DemoReplayBuffer:
                 self.returns_store = returns.unsqueeze(0)
                 self.mask_store = mask.unsqueeze(0)
                 self.max_len = trajectory_len
+
+                if self.prioritised and self.mode == 'il':
+                    self.priorities = priorities.unsqueeze(0)
+
             else:
                 # if not, we need to pad the trajectory or the buffer, because trajectories can be of different lengths
                 if trajectory_len < self.max_len:
@@ -336,6 +360,9 @@ class DemoReplayBuffer:
                     rewards = self._pad_tensor(rewards, self.max_len, pad_trajectory=True)
                     # pad the trajectory mask with zeros
                     mask = self._pad_tensor(mask, self.max_len, pad_trajectory=True)
+
+                    if self.prioritised and self.mode == 'il':
+                        priorities = self._pad_tensor(priorities, self.max_len, pad_trajectory=True)
 
                 elif trajectory_len > self.max_len:
                     # if the trajectory is longer than the max length trajectory so far, pad the buffer
@@ -349,6 +376,9 @@ class DemoReplayBuffer:
                     self.mask_store = self._pad_tensor(self.mask_store, trajectory_len, pad_trajectory=False)
                     self.max_len = trajectory_len
 
+                    if self.prioritised and self.mode == 'il':
+                        self.priorities = self._pad_tensor(self.priorities, trajectory_len, pad_trajectory=False)
+
                 # add the new trajectory to the replay buffer
                 self.obs_store = self._add_to_buffer(obs, self.obs_store)
                 self.hidden_states_store = self._add_to_buffer(hidden_states, self.hidden_states_store)
@@ -356,6 +386,9 @@ class DemoReplayBuffer:
                 self.returns_store = self._add_to_buffer(returns, self.returns_store)
                 self.rew_store = self._add_to_buffer(rewards, self.rew_store)
                 self.mask_store = self._add_to_buffer(mask, self.mask_store)
+
+                if self.prioritised and self.mode == 'il':
+                    self.priorities = self._add_to_buffer(priorities, self.priorities)
 
             # if the capacity of the buffer is full, remove the oldest trajectory
             n_samples = self.get_buffer_n_samples()
@@ -367,7 +400,11 @@ class DemoReplayBuffer:
                 self.returns_store = self.returns_store[:-1, :]
                 self.mask_store = self.mask_store[:-1, :]
 
+                if self.prioritised and self.mode == 'il':
+                    self.priorities = self.priorities[:-1, :]
+
         else:
+            assert self.mode == 'hippo'  # multi-trajectory mode only available for hippo
             # if demo_multi = True, we just directly store the data
             self.obs_store = demo_store.obs_batch
             self.hidden_states_store = demo_store.hidden_states_batch
@@ -471,29 +508,29 @@ class DemoReplayBuffer:
             adv_std = torch.sqrt(mean_sq - sq_mean + 1e-8)  # variance is mean of the square - square of the mean
             self.adv_store = (self.adv_store - adv_mean) / adv_std
 
-    def demo_generator(self, batch_size, mini_batch_size, recurrent=False, sample_method='uniform', mode='hippo'):
+    def demo_generator(self, batch_size, mini_batch_size, recurrent=False, mode='hippo'):
         """Create generator to sample transitions from the replay buffer - used for both HIPPO and IL"""
         if not recurrent:
-            mask_weights = self.mask_store.squeeze(-1).reshape(-1)  # ignore all padding transitions when sampling
-            if sample_method == 'uniform':
-                weights = mask_weights
-                sampler = BatchSampler(WeightedRandomSampler(weights, int(batch_size), replacement=False), mini_batch_size,
+            if mode == 'hippo':
+                self.compute_priorities_hippo()
+            if self.sampling_strategy == 'uniform':
+                weights = self.mask_store.squeeze(-1).reshape(-1)  # ignore all padding transitions when sampling
+                sampler = BatchSampler(WeightedRandomSampler(weights, int(batch_size), replacement=False),
+                                       mini_batch_size,
                                        drop_last=True)
-            elif sample_method == 'prioritised':
-                # prioritise transitions with large |R - V_theta|
-                weights = mask_weights * torch.abs(self.returns_store.reshape(-1) - self.value_store.reshape(-1))
-                sampler = BatchSampler(WeightedRandomSampler(weights, int(batch_size), replacement=False), mini_batch_size,
-                                       drop_last=True)
-            elif sample_method == 'prioritised_clamp':
-                # weight transitions with max(0, R - V_theta)
-                weights = mask_weights * torch.clamp(self.returns_store.reshape(-1) - self.value_store.reshape(-1),
-                                                     min=0)
-                sampler = BatchSampler(WeightedRandomSampler(weights, int(batch_size), replacement=False), mini_batch_size,
+            elif self.sampling_strategy == 'prioritised' or self.sampling_strategy == 'prioritised_clamp':
+                priorities = self.priorities.reshape(-1)
+                sampler = BatchSampler(WeightedRandomSampler(priorities, int(batch_size), replacement=False),
+                                       mini_batch_size,
                                        drop_last=True)
             else:
                 raise NotImplementedError
 
+            self.last_updated_indices = []  # keep track of the latest sampled data points in the buffer
             for indices in sampler:
+                if self.prioritised:
+                    self.last_updated_indices.append(indices)
+
                 obs_batch = torch.FloatTensor(self.obs_store.float()).reshape(-1, *self.obs_size)[indices].to(
                     self.device)
                 hidden_state_batch = torch.FloatTensor(self.hidden_states_store.float()).reshape(
@@ -504,8 +541,15 @@ class DemoReplayBuffer:
                     self.device)
                 val_batch = torch.FloatTensor(self.value_store.float()).reshape(-1)[indices].to(self.device)
                 returns_batch = torch.FloatTensor(self.returns_store.float()).reshape(-1)[indices].to(self.device)
+
+                if self.prioritised:
+                    # importance sampling weights for Prioritised Experience Replay
+                    weights_batch = self.get_per_weights().reshape(-1)[indices].to(self.device)
+                else:
+                    weights_batch = mask_batch
+
                 if mode == 'il':
-                    yield obs_batch, hidden_state_batch, act_batch, returns_batch, mask_batch
+                    yield obs_batch, hidden_state_batch, act_batch, returns_batch, mask_batch, weights_batch
                 elif mode == 'hippo':
                     adv_batch = torch.FloatTensor(self.adv_store.float()).reshape(-1)[indices].to(self.device)
                     yield obs_batch, hidden_state_batch, act_batch, returns_batch, \
@@ -514,6 +558,47 @@ class DemoReplayBuffer:
                     raise NotImplementedError
         else:
             raise NotImplementedError
+
+    def update_priorities(self, updates):
+        """Update priorities for Prioritised Experience Replay"""
+        updates = self._list_to_tensor(updates).reshape(-1)
+        indices = [i for sublist in self.last_updated_indices for i in sublist]
+        rows, cols = self.priorities.shape[0], self.priorities.shape[1]
+        self.priorities = self.priorities.reshape(-1)
+        self.priorities[indices] = updates ** self.alpha
+        self.priorities += self.eps  # ensure that all samples have a non-zero chance of being sampled
+        self.priorities *= self.mask_store.reshape(-1)
+        self._normalise_priorities()
+        self.priorities = self.priorities.reshape(rows, cols).unsqueeze(-1)
+
+    def compute_priorities_hippo(self):
+        """Directly compute the priorities in HIPPO rather than using the TD-error sampled from the buffer"""
+        if self.sampling_strategy == 'prioritised':
+            self.priorities = torch.abs(self.returns_store.squeeze(-1) - self.value_store)
+        elif self.sampling_strategy == 'prioritised_clamp':
+            self.priorities = torch.clamp(self.returns_store - self.value_store, min=0)
+        else:
+            raise NotImplementedError
+        self.priorities = self.priorities ** self.alpha
+        self.priorities += self.eps
+        self.priorities *= self.mask_store.squeeze(-1)
+        self._normalise_priorities()
+
+    def get_per_weights(self):
+        """Compute the Prioritised Experience Replay importance sampling weights. Used for IL"""
+        n = self.get_n_valid_transitions()
+        per_weights = ((1 / n) * (1 / self.priorities)) ** self.beta
+        max_weight = torch.max(per_weights)
+        per_weights = per_weights / max_weight
+
+        return per_weights
+
+    def _normalise_priorities(self):
+        """Normalise the priorities"""
+        summed = torch.sum(self.priorities)
+        self.priorities = self.priorities / summed
+        self.max_priority = torch.max(self.priorities)
+        print(self.max_priority)
 
 
 if __name__ == '__main__':

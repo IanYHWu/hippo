@@ -29,7 +29,6 @@ class PPODemoHIPPO(PPO):
                  demo_batch_size=512,
                  demo_mini_batch_size=664,
                  demo_epochs=3,
-                 demo_sampling_strategy='uniform',
                  demo_value_coef=0.05,
                  demo_entropy_coef=0.01,
                  demo_normalise_adv=False):
@@ -55,7 +54,6 @@ class PPODemoHIPPO(PPO):
         self.demo_mini_batch_size = demo_mini_batch_size
         self.demo_epochs = demo_epochs
         self.demo_batch_size = demo_batch_size
-        self.demo_sampling_strategy = demo_sampling_strategy
         self.demo_value_coef = demo_value_coef
         self.demo_entropy_coef = demo_entropy_coef
         self.demo_normalise_adv = demo_normalise_adv
@@ -90,7 +88,6 @@ class PPODemoHIPPO(PPO):
             generator = self.demo_buffer.demo_generator(batch_size=batch_size,
                                                         mini_batch_size=mini_batch_size,
                                                         recurrent=recurrent,
-                                                        sample_method=self.demo_sampling_strategy,
                                                         mode='hippo')
             for sample in generator:
                 obs_batch, hidden_state_batch, act_batch, return_batch, mask_batch, old_log_prob_act_batch, \
@@ -151,7 +148,6 @@ def get_args_demo_hippo(params):
                   'demo_mini_batch_size': params.demo_mini_batch_size,
                   'demo_epochs': params.demo_epochs,
                   'demo_batch_size': params.demo_batch_size,
-                  'demo_sampling_strategy': params.demo_sampling_strategy,
                   'demo_value_coef': params.demo_value_coef,
                   'demo_entropy_coef': params.demo_entropy_coef,
                   'demo_normalise_adv': params.demo_normalise_adv}

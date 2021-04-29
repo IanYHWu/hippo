@@ -27,8 +27,7 @@ class PPODemoIL(PPO):
                  demo_mini_batch_size=512,
                  demo_value_coef=0.05,
                  demo_loss_coef=1,
-                 demo_epochs=1,
-                 demo_sampling_strategy='uniform'):
+                 demo_epochs=1):
 
         super().__init__(env, actor_critic, storage, device)
 
@@ -51,7 +50,6 @@ class PPODemoIL(PPO):
         self.demo_mini_batch_size = demo_mini_batch_size
         self.demo_epochs = demo_epochs
         self.demo_batch_size = demo_batch_size
-        self.demo_sampling_strategy = demo_sampling_strategy
 
     def demo_optimize(self, lr_schedule):
         val_loss_list, pol_loss_list = [], []
@@ -70,25 +68,25 @@ class PPODemoIL(PPO):
         if lr is None:
             lr = self.demo_learning_rate
         demo_optimizer = optim.Adam(self.actor_critic.parameters(), lr=lr, eps=1e-5)
+        priority_updates = None
 
         self.demo_buffer.compute_pi_v(self.actor_critic)
         self.actor_critic.train()
         for e in range(self.demo_epochs):
+            priority_updates = []
             recurrent = self.actor_critic.is_recurrent()
             generator = self.demo_buffer.demo_generator(batch_size=batch_size,
                                                         mini_batch_size=mini_batch_size,
                                                         recurrent=recurrent,
-                                                        sample_method=self.demo_sampling_strategy,
                                                         mode='il')
             for sample in generator:
-                obs_batch, hidden_state_batch, act_batch, returns_batch, mask_batch = sample
-
+                obs_batch, hidden_state_batch, act_batch, returns_batch, mask_batch, weights_batch = sample
                 dist_batch, value_batch, _ = self.actor_critic(obs_batch, hidden_state_batch, mask_batch)
                 log_prob_act_batch = dist_batch.log_prob(act_batch)
-                pol_loss = -log_prob_act_batch * torch.clamp(returns_batch - value_batch, min=0)
+                pol_loss = -log_prob_act_batch * torch.clamp(returns_batch - value_batch, min=0) * weights_batch
                 pol_loss = pol_loss.mean()
 
-                val_loss = 0.5 * (torch.clamp(returns_batch - value_batch, min=0)).pow(2)
+                val_loss = weights_batch * 0.5 * (torch.clamp(returns_batch - value_batch, min=0)).pow(2)
                 val_loss = val_loss.mean()
 
                 loss = self.demo_loss_coef * (pol_loss + self.demo_value_coef * val_loss)
@@ -98,6 +96,13 @@ class PPODemoIL(PPO):
                 demo_optimizer.zero_grad()
                 val_loss_list.append(val_loss.item())
                 pol_loss_list.append(pol_loss.item())
+
+                if self.demo_buffer.prioritised:
+                    with torch.no_grad():
+                        priority_updates.append(torch.clamp(returns_batch - value_batch, min=0))
+
+        if self.demo_buffer.prioritised:
+            self.demo_buffer.update_priorities(priority_updates)
 
         summary = {'loss/pol': np.mean(pol_loss_list),
                    'loss/val': np.mean(val_loss_list)}
@@ -121,7 +126,6 @@ def get_args_demo_il(params):
                   'demo_value_coef': params.demo_value_coef,
                   'demo_epochs': params.demo_epochs,
                   'demo_batch_size': params.demo_batch_size,
-                  'demo_loss_coef': params.demo_loss_coef,
-                  'demo_sampling_strategy': params.demo_sampling_strategy}
+                  'demo_loss_coef': params.demo_loss_coef}
 
     return param_dict

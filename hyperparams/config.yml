@@ -66,8 +66,8 @@ tiny_demo_il:
     demo_value_coef: 0.005
     demo_loss_coef: 0.1
     demo_learning_rate: 0.0001
-    demo_batch_size: 2048
-    demo_mini_batch_size: 256
+    demo_batch_size: 512
+    demo_mini_batch_size: 128
     demo_epochs: 1
     hot_start: 10
     buffer_max_samples: 100
@@ -102,7 +102,7 @@ tiny_demo_hippo:
     hidden_size: 256
     demo_coef: 0.5
     demo_learning_rate: 0.0005
-    demo_batch_size: 64
+    demo_batch_size: 128
     demo_mini_batch_size: 64
     demo_epochs: 10
     hot_start: 10

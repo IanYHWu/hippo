@@ -39,10 +39,6 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
         else:
             multi_demo = False
             print("Using Single Demonstrations")
-        if params.algo == 'ppo_demo_il':
-            print("Using Agent - PPO Demo, Imitation Learning Variant")
-        else:
-            print("Using Agent - PPO Demo, HIPPO")
 
         # if hot start, load hot start trajectories into the buffer
         if params.hot_start and not multi_demo:
@@ -76,7 +72,6 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
         demo = False
         multi_demo = False
         demo_lr_scheduler = None
-        print("Using Agent - Vanilla PPO")
 
     print("Now training...")
     # main PPO training loop
@@ -243,7 +238,20 @@ def main(args):
     else:
         evaluator = None
 
-    if params.algo == 'ppo_demo_il' or params.algo == 'ppo_demo_hippo':
+    if params.algo == 'ppo_demo_il':
+        algo = 'il'
+        print("Using Agent - PPO Demo, Imitation Learning Variant")
+    elif params.algo == 'ppo_demo_hippo':
+        algo = 'hippo'
+        print("Using Agent - PPO Demo, HIPPO")
+
+    elif params.algo == 'ppo':
+        algo = 'ppo'
+        print("Using Agent - Vanilla PPO")
+    else:
+        raise NotImplementedError
+
+    if algo == 'il' or algo == 'hippo':
         print("Initialising demonstration storage and buffer...")
         if params.demo_multi:
             demo_rollout = MultiDemoStorage(observation_shape, params.hidden_size, params.demo_multi_steps, params.n_envs,
@@ -251,7 +259,9 @@ def main(args):
         else:
             demo_rollout = DemoStorage(device)
         demo_buffer = DemoReplayBuffer(observation_shape, params.hidden_size, device,
-                                       max_samples=params.buffer_max_samples)
+                                       max_samples=params.buffer_max_samples,
+                                       sampling_strategy=params.demo_sampling_strategy,
+                                       mode=algo)
         print("Initialising controller...")
         controller = DemoScheduler(args, params)
         print("Initialising demonstrator...")
