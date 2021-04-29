@@ -63,20 +63,21 @@ tiny_demo_il:
     architecture: ResNet
     recurrent: False
     hidden_size: 256
-    demo_value_coef: 0.05
+    demo_value_coef: 0.005
     demo_loss_coef: 0.1
-    demo_learning_rate: 0.0005
-    demo_batch_size: 4096
-    demo_mini_batch_size: 512
+    demo_learning_rate: 0.0001
+    demo_batch_size: 2048
+    demo_mini_batch_size: 256
     demo_epochs: 1
-    hot_start: 5
+    hot_start: 10
     buffer_max_samples: 100
-    num_demos: 10
+    num_demos: 5000
     demo_schedule: linear
-    demo_learn_ratio: 0.1
+    demo_learn_ratio: 1
     demo_multi: False
     demo_lr_schedule: False
     demo_max_steps: 999
+    demo_sampling_strategy: uniform
 
 tiny_demo_hippo:
     n_envs: 2

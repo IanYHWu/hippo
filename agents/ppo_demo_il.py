@@ -27,7 +27,8 @@ class PPODemoIL(PPO):
                  demo_mini_batch_size=512,
                  demo_value_coef=0.05,
                  demo_loss_coef=1,
-                 demo_epochs=1):
+                 demo_epochs=1,
+                 demo_sampling_strategy='uniform'):
 
         super().__init__(env, actor_critic, storage, device)
 
@@ -50,6 +51,7 @@ class PPODemoIL(PPO):
         self.demo_mini_batch_size = demo_mini_batch_size
         self.demo_epochs = demo_epochs
         self.demo_batch_size = demo_batch_size
+        self.demo_sampling_strategy = demo_sampling_strategy
 
     def demo_optimize(self, lr_schedule):
         val_loss_list, pol_loss_list = [], []
@@ -76,7 +78,7 @@ class PPODemoIL(PPO):
             generator = self.demo_buffer.demo_generator(batch_size=batch_size,
                                                         mini_batch_size=mini_batch_size,
                                                         recurrent=recurrent,
-                                                        sample_method='prioritised_clamp',
+                                                        sample_method=self.demo_sampling_strategy,
                                                         mode='il')
             for sample in generator:
                 obs_batch, hidden_state_batch, act_batch, returns_batch, mask_batch = sample
@@ -119,6 +121,7 @@ def get_args_demo_il(params):
                   'demo_value_coef': params.demo_value_coef,
                   'demo_epochs': params.demo_epochs,
                   'demo_batch_size': params.demo_batch_size,
-                  'demo_loss_coef': params.demo_loss_coef}
+                  'demo_loss_coef': params.demo_loss_coef,
+                  'demo_sampling_strategy': params.demo_sampling_strategy}
 
     return param_dict
