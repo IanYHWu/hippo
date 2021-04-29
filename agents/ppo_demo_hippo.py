@@ -87,10 +87,11 @@ class PPODemoHIPPO(PPO):
         self.actor_critic.train()
         for e in range(self.demo_epochs):
             recurrent = self.actor_critic.is_recurrent()
-            generator = self.demo_buffer.hippo_demo_generator(batch_size=batch_size,
-                                                              mini_batch_size=mini_batch_size,
-                                                              recurrent=recurrent,
-                                                              sample_method=self.demo_sampling_strategy)
+            generator = self.demo_buffer.demo_generator(batch_size=batch_size,
+                                                        mini_batch_size=mini_batch_size,
+                                                        recurrent=recurrent,
+                                                        sample_method=self.demo_sampling_strategy,
+                                                        mode='hippo')
             for sample in generator:
                 obs_batch, hidden_state_batch, act_batch, return_batch, mask_batch, old_log_prob_act_batch, \
                 old_value_batch, adv_batch = sample

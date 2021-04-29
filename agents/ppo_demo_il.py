@@ -23,10 +23,11 @@ class PPODemoIL(PPO):
                  value_coef=0.05,
                  entropy_coef=0.01,
                  demo_learning_rate=5e-4,
-                 demo_batch_size=512,
-                 demo_mini_batch_size=664,
-                 demo_coef=0.5,
-                 demo_epochs=3):
+                 demo_batch_size=4096,
+                 demo_mini_batch_size=512,
+                 demo_value_coef=0.05,
+                 demo_loss_coef=1,
+                 demo_epochs=1):
 
         super().__init__(env, actor_critic, storage, device)
 
@@ -43,49 +44,56 @@ class PPODemoIL(PPO):
         self.entropy_coef = entropy_coef
 
         self.demo_buffer = demo_buffer
-        self.demo_optimizer = optim.Adam(self.actor_critic.parameters(), lr=demo_learning_rate, eps=1e-5)
         self.demo_learning_rate = demo_learning_rate
-        self.demo_coef = demo_coef
+        self.demo_value_coef = demo_value_coef
+        self.demo_loss_coef = demo_loss_coef
         self.demo_mini_batch_size = demo_mini_batch_size
         self.demo_epochs = demo_epochs
         self.demo_batch_size = demo_batch_size
 
-    def demo_optimize(self):
-        print('Demo Optimising!')
+    def demo_optimize(self, lr_schedule):
         val_loss_list, pol_loss_list = [], []
-        buffer_size = self.demo_buffer.get_buffer_capacity()
+
+        n_valid_transitions = self.demo_buffer.get_n_valid_transitions()
         batch_size = self.demo_batch_size
+        # the batch size must be <= than the number of non-padding transitions in the trajectory
+        if n_valid_transitions < batch_size:
+            batch_size = n_valid_transitions
         mini_batch_size = self.demo_mini_batch_size
-        if buffer_size < self.demo_batch_size:
-            batch_size = buffer_size
-        if self.demo_mini_batch_size > self.demo_batch_size:
+        # the mini-batch size must be <= the batch size
+        if batch_size < mini_batch_size:
             mini_batch_size = batch_size
 
+        lr = lr_schedule.get_lr()
+        if lr is None:
+            lr = self.demo_learning_rate
+        demo_optimizer = optim.Adam(self.actor_critic.parameters(), lr=lr, eps=1e-5)
+
+        self.demo_buffer.compute_pi_v(self.actor_critic)
         self.actor_critic.train()
         for e in range(self.demo_epochs):
             recurrent = self.actor_critic.is_recurrent()
-            generator = self.demo_buffer.il_demo_generator(batch_size=batch_size,
-                                                           mini_batch_size=mini_batch_size,
-                                                           recurrent=recurrent)
+            generator = self.demo_buffer.demo_generator(batch_size=batch_size,
+                                                        mini_batch_size=mini_batch_size,
+                                                        recurrent=recurrent,
+                                                        sample_method='prioritised_clamp',
+                                                        mode='il')
             for sample in generator:
-                obs_batch, hidden_state_batch, act_batch, mask_batch, returns_batch = sample
+                obs_batch, hidden_state_batch, act_batch, returns_batch, mask_batch = sample
+
                 dist_batch, value_batch, _ = self.actor_critic(obs_batch, hidden_state_batch, mask_batch)
                 log_prob_act_batch = dist_batch.log_prob(act_batch)
-
-                pol_loss = -log_prob_act_batch * torch.max(torch.zeros(returns_batch.shape).to(self.device),
-                                                           (returns_batch - value_batch))
+                pol_loss = -log_prob_act_batch * torch.clamp(returns_batch - value_batch, min=0)
                 pol_loss = pol_loss.mean()
 
-                val_loss = 0.5 * (torch.max(torch.zeros(returns_batch.shape).to(self.device),
-                                            (returns_batch - value_batch))).pow(2)
+                val_loss = 0.5 * (torch.clamp(returns_batch - value_batch, min=0)).pow(2)
                 val_loss = val_loss.mean()
 
-                loss = pol_loss + self.demo_coef * val_loss
+                loss = self.demo_loss_coef * (pol_loss + self.demo_value_coef * val_loss)
                 loss.backward()
 
-                torch.nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.grad_clip_norm)
-                self.demo_optimizer.step()
-                self.demo_optimizer.zero_grad()
+                demo_optimizer.step()
+                demo_optimizer.zero_grad()
                 val_loss_list.append(val_loss.item())
                 pol_loss_list.append(pol_loss.item())
 
@@ -108,8 +116,9 @@ def get_args_demo_il(params):
                   'entropy_coef': params.entropy_coef,
                   'demo_learning_rate': params.demo_learning_rate,
                   'demo_mini_batch_size': params.demo_mini_batch_size,
-                  'demo_coef': params.demo_coef,
+                  'demo_value_coef': params.demo_value_coef,
                   'demo_epochs': params.demo_epochs,
-                  'demo_batch_size': params.demo_batch_size}
+                  'demo_batch_size': params.demo_batch_size,
+                  'demo_loss_coef': params.demo_loss_coef}
 
     return param_dict

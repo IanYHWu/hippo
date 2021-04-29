@@ -443,11 +443,12 @@ class DemoReplayBuffer:
         """Count the number of trajectories in the buffer"""
         return len(self.act_store)
 
-    def _compute_pi_v(self, actor_critic):
+    def compute_pi_v(self, actor_critic):
         """Compute and store action logits and values for all transitions in the buffer using an actor critic -
         used for HIPPO"""
         log_prob_act_list = []
         val_list = []
+        actor_critic.eval()
         with torch.no_grad():
             for i in range(0, len(self.obs_store)):
                 dist_batch, val_batch, _ = actor_critic(self.obs_store[i].squeeze(1).float().to(self.device),
@@ -462,7 +463,7 @@ class DemoReplayBuffer:
 
     def compute_hippo_advantages(self, actor_critic, gamma=0.99, lmbda=0.95, normalise_adv=True):
         """Compute the advantages of the transitions - used for HIPPO"""
-        self._compute_pi_v(actor_critic)
+        self.compute_pi_v(actor_critic)
         adv_list = []
         # can easily vectorise this - will do at some point
         # padding
@@ -491,8 +492,8 @@ class DemoReplayBuffer:
             adv_std = torch.sqrt(mean_sq - sq_mean + 1e-8)  # variance is mean of the square - square of the mean
             self.adv_store = (self.adv_store - adv_mean) / adv_std
 
-    def hippo_demo_generator(self, batch_size, mini_batch_size, recurrent=False, sample_method='uniform'):
-        """Create generator to sample transitions from the replay buffer - used for HIPPO"""
+    def demo_generator(self, batch_size, mini_batch_size, recurrent=False, sample_method='uniform', mode='hippo'):
+        """Create generator to sample transitions from the replay buffer - used for both HIPPO and IL"""
         if not recurrent:
             mask_weights = self.mask_store.squeeze(-1).reshape(-1)  # ignore all padding transitions when sampling
             if sample_method == 'uniform':
@@ -523,11 +524,15 @@ class DemoReplayBuffer:
                 log_prob_act_batch = torch.FloatTensor(self.log_prob_act_store.float()).reshape(-1)[indices].to(
                     self.device)
                 val_batch = torch.FloatTensor(self.value_store.float()).reshape(-1)[indices].to(self.device)
-                adv_batch = torch.FloatTensor(self.adv_store.float()).reshape(-1)[indices].to(self.device)
                 returns_batch = torch.FloatTensor(self.returns_store.float()).reshape(-1)[indices].to(self.device)
-                yield obs_batch, hidden_state_batch, act_batch, returns_batch, \
-                      mask_batch, log_prob_act_batch, val_batch, adv_batch
-
+                if mode == 'il':
+                    yield obs_batch, hidden_state_batch, act_batch, returns_batch, mask_batch
+                elif mode == 'hippo':
+                    adv_batch = torch.FloatTensor(self.adv_store.float()).reshape(-1)[indices].to(self.device)
+                    yield obs_batch, hidden_state_batch, act_batch, returns_batch, \
+                          mask_batch, log_prob_act_batch, val_batch, adv_batch
+                else:
+                    raise NotImplementedError
         else:
             raise NotImplementedError
 
