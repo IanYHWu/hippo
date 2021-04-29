@@ -413,27 +413,6 @@ class DemoReplayBuffer:
         big_tensor = torch.stack(list_of_tensors)
         return big_tensor
 
-    def il_demo_generator(self, batch_size, mini_batch_size, sample_method='uniform', recurrent=False):
-        """Create generator to sample transitions from the replay buffer - used for Imitation Learning"""
-        if not recurrent:
-            if sample_method == 'uniform':
-                sampler = BatchSampler(SubsetRandomSampler(range(batch_size)),
-                                       mini_batch_size, drop_last=True)
-                for indices in sampler:
-                    obs_batch = torch.FloatTensor(self.obs_store.float()).reshape(-1, *self.obs_size)[indices].to(
-                        self.device)
-                    hidden_state_batch = torch.FloatTensor(self.hidden_states_store.float()).reshape(
-                        -1, self.hidden_state_size).to(self.device)
-                    act_batch = torch.FloatTensor(self.act_store.float()).reshape(-1)[indices].to(self.device)
-                    mask_batch = torch.FloatTensor(self.mask_store.float()).reshape(-1)[indices].to(self.device)
-                    returns_batch = torch.FloatTensor(self.returns_store.float()).reshape(-1)[indices].to(self.device)
-                    yield obs_batch, hidden_state_batch, act_batch, mask_batch, returns_batch
-            else:
-                raise NotImplementedError
-
-        else:
-            raise NotImplementedError
-
     def get_n_valid_transitions(self):
         """Count the number of non-padding transitions stored in the buffer"""
         valid_samples = torch.count_nonzero(self.mask_store)
@@ -498,18 +477,18 @@ class DemoReplayBuffer:
             mask_weights = self.mask_store.squeeze(-1).reshape(-1)  # ignore all padding transitions when sampling
             if sample_method == 'uniform':
                 weights = mask_weights
-                sampler = BatchSampler(WeightedRandomSampler(weights, batch_size, replacement=False), mini_batch_size,
+                sampler = BatchSampler(WeightedRandomSampler(weights, int(batch_size), replacement=False), mini_batch_size,
                                        drop_last=True)
             elif sample_method == 'prioritised':
                 # prioritise transitions with large |R - V_theta|
                 weights = mask_weights * torch.abs(self.returns_store.reshape(-1) - self.value_store.reshape(-1))
-                sampler = BatchSampler(WeightedRandomSampler(weights, batch_size, replacement=False), mini_batch_size,
+                sampler = BatchSampler(WeightedRandomSampler(weights, int(batch_size), replacement=False), mini_batch_size,
                                        drop_last=True)
             elif sample_method == 'prioritised_clamp':
                 # weight transitions with max(0, R - V_theta)
                 weights = mask_weights * torch.clamp(self.returns_store.reshape(-1) - self.value_store.reshape(-1),
                                                      min=0)
-                sampler = BatchSampler(WeightedRandomSampler(weights, batch_size, replacement=False), mini_batch_size,
+                sampler = BatchSampler(WeightedRandomSampler(weights, int(batch_size), replacement=False), mini_batch_size,
                                        drop_last=True)
             else:
                 raise NotImplementedError

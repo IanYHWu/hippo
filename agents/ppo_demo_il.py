@@ -57,11 +57,11 @@ class PPODemoIL(PPO):
         n_valid_transitions = self.demo_buffer.get_n_valid_transitions()
         batch_size = self.demo_batch_size
         # the batch size must be <= than the number of non-padding transitions in the trajectory
-        if n_valid_transitions < batch_size:
+        if n_valid_transitions <= batch_size:
             batch_size = n_valid_transitions
         mini_batch_size = self.demo_mini_batch_size
         # the mini-batch size must be <= the batch size
-        if batch_size < mini_batch_size:
+        if batch_size <= mini_batch_size:
             mini_batch_size = batch_size
 
         lr = lr_schedule.get_lr()
