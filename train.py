@@ -30,7 +30,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
     done = np.zeros(params.n_envs)
     start_ = time.time()
 
-    if params.algo == 'ppo_demo_il' or params.algo == 'ppo_demo_hippo':
+    if params.algo == 'hippo':
         demo = True
         demo_lr_scheduler = DemoLRScheduler(args, params)
         if params.demo_multi:
@@ -61,7 +61,6 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                         step_count += 1
                     if step_count < params.demo_max_steps:
                         # valid trajectories defined by whether they are shorter than demo_max_steps
-                        demo_rollout.compute_returns()
                         demo_buffer.store(demo_rollout)
                         demo_env.close()
                         valid = True
@@ -117,7 +116,6 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                         step_count += 1
                     if step_count < params.demo_max_steps:
                         # if the trajectory is valid, compute returns and store it
-                        demo_rollout.compute_returns()
                         demo_buffer.store(demo_rollout)  # store the trajectory in demo_buffer and reset demo_rollout
                         demo_env.close()
                         valid = True
@@ -238,20 +236,16 @@ def main(args):
     else:
         evaluator = None
 
-    if params.algo == 'ppo_demo_il':
-        algo = 'il'
-        print("Using Agent - PPO Demo, Imitation Learning Variant")
-    elif params.algo == 'ppo_demo_hippo':
+    if params.algo == 'hippo':
         algo = 'hippo'
         print("Using Agent - PPO Demo, HIPPO")
-
     elif params.algo == 'ppo':
         algo = 'ppo'
         print("Using Agent - Vanilla PPO")
     else:
         raise NotImplementedError
 
-    if algo == 'il' or algo == 'hippo':
+    if algo == 'hippo':
         print("Initialising demonstration storage and buffer...")
         if params.demo_multi:
             demo_rollout = MultiDemoStorage(observation_shape, params.hidden_size, params.demo_multi_steps, params.n_envs,

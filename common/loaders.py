@@ -3,8 +3,7 @@ from envs.procgen_wrappers import *
 from common.model import *
 from common.actor_critic import CategoricalAC
 from agents.ppo import PPO, get_args
-from agents.ppo_demo_il import PPODemoIL, get_args_demo_il
-from agents.ppo_demo_hippo import PPODemoHIPPO, get_args_demo_hippo
+from agents.hippo import HIPPO, get_args_hippo
 
 
 def load_env(args, params, eval=False, demo=False, multi_demo=False, demo_level_seed=None, eval_seed=None):
@@ -78,12 +77,9 @@ def load_agent(env, actor_critic, storage, device, params, demo_buffer=None):
     if params.algo == "ppo":
         params_dict = get_args(params)
         agent = PPO(env, actor_critic, storage, device, **params_dict)
-    elif params.algo == "ppo_demo_il":
-        params_dict = get_args_demo_il(params)
-        agent = PPODemoIL(env, actor_critic, storage, demo_buffer, device, **params_dict)
-    elif params.algo == 'ppo_demo_hippo':
-        params_dict = get_args_demo_hippo(params)
-        agent = PPODemoHIPPO(env, actor_critic, storage, demo_buffer, device, **params_dict)
+    elif params.algo == 'hippo':
+        params_dict = get_args_hippo(params)
+        agent = HIPPO(env, actor_critic, storage, demo_buffer, device, **params_dict)
     else:
         raise NotImplementedError
 

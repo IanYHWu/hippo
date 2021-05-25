@@ -151,7 +151,6 @@ class DemoStorage:
         self.hidden_states_store = []
         self.act_store = []
         self.rew_store = []
-        self.returns_store = None
         self.trajectory_length = 0
 
     def store(self, obs, hidden_state, act, rew):
@@ -169,22 +168,12 @@ class DemoStorage:
         big_tensor = torch.stack(list_of_tensors)
         return big_tensor
 
-    def _stores_to_tensors(self):
+    def stores_to_tensors(self):
         """Convert data to tensor form"""
         self.obs_store = self._list_to_tensor(self.obs_store)
         self.hidden_states_store = self._list_to_tensor(self.hidden_states_store)
         self.act_store = self._list_to_tensor(self.act_store)
         self.rew_store = self._list_to_tensor(self.rew_store)
-
-    def compute_returns(self, gamma=0.99):
-        """Compute the returns"""
-        self._stores_to_tensors()
-        self.returns_store = torch.zeros(self.trajectory_length)
-        G = 0
-        for i in reversed(range(self.trajectory_length)):
-            rew = self.rew_store[i]
-            G = rew + gamma * G
-            self.returns_store[i] = G
 
     def get_sum_rewards(self):
         return torch.sum(self.rew_store)
@@ -270,16 +259,6 @@ class MultiDemoStorage:
 
         return mask, non_zero_rows
 
-    def compute_returns(self, gamma=0.99):
-        """Remove cliffhangers and then compute the returns"""
-        self._remove_cliffhangers()
-        G = 0
-        self.return_batch = torch.zeros(len(self.rew_batch), self.num_steps)
-        for i in reversed(range(self.num_steps)):
-            rew = self.rew_batch[:, i]
-            G = rew + gamma * G
-            self.return_batch[:, i] = G
-
 
 class DemoReplayBuffer:
     """Demonstration replay buffer. Used for both demo_multi = True and demo_multi = False"""
@@ -321,12 +300,12 @@ class DemoReplayBuffer:
         if isinstance(demo_store, DemoStorage):
             # for demo_multi = False i.e. we sample single demonstrations from the oracle each time
             # Extract the single trajectory
+            demo_store.stores_to_tensors()
             obs = demo_store.obs_store
             hidden_states = demo_store.hidden_states_store
             actions = demo_store.act_store
             rewards = demo_store.rew_store
             trajectory_len = demo_store.trajectory_length
-            returns = demo_store.returns_store.reshape(trajectory_len, 1)
             demo_store.reset()  # reset the demo_store after we extract the data from it
 
             mask = torch.ones(trajectory_len).reshape(trajectory_len, 1)  # generate mask of ones, of trajectory length
@@ -342,7 +321,6 @@ class DemoReplayBuffer:
                 self.hidden_states_store = hidden_states.unsqueeze(0)
                 self.act_store = actions.unsqueeze(0)
                 self.rew_store = rewards.unsqueeze(0)
-                self.returns_store = returns.unsqueeze(0)
                 self.mask_store = mask.unsqueeze(0)
                 self.max_len = trajectory_len
 
@@ -356,7 +334,6 @@ class DemoReplayBuffer:
                     obs = self._pad_tensor(obs, self.max_len, pad_trajectory=True)
                     hidden_states = self._pad_tensor(hidden_states, self.max_len, pad_trajectory=True)
                     actions = self._pad_tensor(actions, self.max_len, pad_trajectory=True)
-                    returns = self._pad_tensor(returns, self.max_len, pad_trajectory=True)
                     rewards = self._pad_tensor(rewards, self.max_len, pad_trajectory=True)
                     # pad the trajectory mask with zeros
                     mask = self._pad_tensor(mask, self.max_len, pad_trajectory=True)
@@ -370,7 +347,6 @@ class DemoReplayBuffer:
                     self.hidden_states_store = self._pad_tensor(self.hidden_states_store, trajectory_len,
                                                                 pad_trajectory=False)
                     self.act_store = self._pad_tensor(self.act_store, trajectory_len, pad_trajectory=False)
-                    self.returns_store = self._pad_tensor(self.returns_store, trajectory_len, pad_trajectory=False)
                     self.rew_store = self._pad_tensor(self.rew_store, trajectory_len, pad_trajectory=False)
                     # pad the buffer mask with zeros
                     self.mask_store = self._pad_tensor(self.mask_store, trajectory_len, pad_trajectory=False)
@@ -383,7 +359,6 @@ class DemoReplayBuffer:
                 self.obs_store = self._add_to_buffer(obs, self.obs_store)
                 self.hidden_states_store = self._add_to_buffer(hidden_states, self.hidden_states_store)
                 self.act_store = self._add_to_buffer(actions, self.act_store)
-                self.returns_store = self._add_to_buffer(returns, self.returns_store)
                 self.rew_store = self._add_to_buffer(rewards, self.rew_store)
                 self.mask_store = self._add_to_buffer(mask, self.mask_store)
 
@@ -397,7 +372,6 @@ class DemoReplayBuffer:
                 self.hidden_states_store = self.hidden_states_store[:-1, :]
                 self.act_store = self.act_store[:-1, :]
                 self.rew_store = self.rew_store[:-1, :]
-                self.returns_store = self.returns_store[:-1, :]
                 self.mask_store = self.mask_store[:-1, :]
 
                 if self.prioritised and self.mode == 'il':
@@ -410,7 +384,6 @@ class DemoReplayBuffer:
             self.hidden_states_store = demo_store.hidden_states_batch
             self.act_store = demo_store.act_batch
             self.rew_store = demo_store.rew_batch
-            self.returns_store = demo_store.return_batch
             self.mask_store = demo_store.mask_batch
             self.max_len = self.mask_store.shape[1]
 
@@ -477,14 +450,15 @@ class DemoReplayBuffer:
             self.value_store *= self.mask_store.squeeze(-1)  # set padding values to zero using the mask
             self.log_prob_act_store = self._list_to_tensor(log_prob_act_list).cpu()
 
-    def compute_hippo_advantages(self, actor_critic, gamma=0.99, lmbda=0.95, normalise_adv=True):
+    def compute_estimates(self, actor_critic, gamma=0.99, lmbda=0.95, normalise_adv=True):
         """Compute the advantages of the transitions - used for HIPPO"""
         self.compute_pi_v(actor_critic)
         adv_list = []
+        returns_list = []
         # can easily vectorise this - will do at some point
-        # padding
         for sample in range(0, len(self.act_store)):
             adv_store = torch.zeros(self.max_len)
+            returns_store = torch.zeros(self.max_len)
             A = 0
             for i in reversed(range(self.max_len)):
                 rew = self.rew_store[sample][i].cpu()
@@ -496,9 +470,12 @@ class DemoReplayBuffer:
                     next_value = self.value_store[sample][i + 1].cpu()
                 delta = (rew + gamma * next_value * mask) - value
                 adv_store[i] = A = gamma * lmbda * A * mask + delta
+                returns_store[i] = A + value
             adv_list.append(adv_store)
+            returns_list.append(returns_store)
 
         self.adv_store = self._list_to_tensor(adv_list)
+        self.returns_store = self._list_to_tensor(returns_list)
 
         if normalise_adv:
             # when we normalise the advantages, we need to account for the fact that some transitions are paddings.
@@ -585,7 +562,7 @@ class DemoReplayBuffer:
         self._normalise_priorities()
 
     def get_per_weights(self):
-        """Compute the Prioritised Experience Replay importance sampling weights. Used for IL"""
+        """Compute the Prioritised Experience Replay importance sampling weights"""
         n = self.get_n_valid_transitions()
         per_weights = ((1 / n) * (1 / self.priorities)) ** self.beta
         max_weight = torch.max(per_weights)
@@ -598,6 +575,5 @@ class DemoReplayBuffer:
         summed = torch.sum(self.priorities)
         self.priorities = self.priorities / summed
         self.max_priority = torch.max(self.priorities)
-        print(self.max_priority)
 
 
