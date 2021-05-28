@@ -102,7 +102,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                     if get_new_seed:
                         demo_level_seed = random.randint(0, int(2147483647))
                     step_count = 0
-                    demo_env = load_env(args, params, demo=True, multi_demo=False, demo_level_seed=demo_level_seed)
+                    demo_env = load_env(args, params, demo=True, demo_level_seed=demo_level_seed)
                     demo_obs = demo_env.reset()
                     demo_hidden_state = np.zeros((1, rollout.hidden_state_size))
                     demo_done = np.zeros(1)
@@ -138,21 +138,20 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
         if demo and multi_demo:
             if controller.learn_from_demos(curr_timestep, params.n_envs, params.n_steps, always_learn=False):
                 demo_level_seeds = extract_seeds(info)  # extract the current seeds of all n_envs environments
-                demo_env = load_env(args, params, demo=True, multi_demo=True, demo_level_seed=demo_level_seeds)
-                # NEED TO CHECK - I might not be loading the seeds correctly
-                demo_obs = demo_env.reset()
-                demo_hidden_state = np.zeros((params.n_envs, rollout.hidden_state_size))
-                demo_done = np.zeros(params.n_envs)
-                for step in range(params.demo_multi_steps):
-                    demo_act, demo_next_hidden_state = demonstrator.predict(demo_obs, demo_hidden_state, demo_done)
-                    demo_next_obs, demo_rew, demo_done, demo_info = demo_env.step(demo_act)
-                    demo_rollout.store(demo_obs, demo_hidden_state, demo_act, demo_rew, demo_done)
-                    demo_obs = demo_next_obs
-                    demo_hidden_state = demo_next_hidden_state
-                demo_rollout.compute_returns()
+                for seed in demo_level_seeds:
+                    demo_env = load_env(args, params, demo=True, demo_level_seed=seed)
+                    demo_obs = demo_env.reset()
+                    demo_hidden_state = np.zeros((1, rollout.hidden_state_size))
+                    demo_done = np.zeros(1)
+                    for step in range(params.demo_multi_steps):
+                        demo_act, demo_next_hidden_state = demonstrator.predict(demo_obs, demo_hidden_state, demo_done)
+                        demo_next_obs, demo_rew, demo_done, demo_info = demo_env.step(demo_act)
+                        demo_rollout.store(demo_obs, demo_hidden_state, demo_act, demo_rew, demo_done)
+                        demo_obs = demo_next_obs
+                        demo_hidden_state = demo_next_hidden_state
+                    demo_rollout.increment_env_counter()
+                    demo_env.close()
                 demo_buffer.store(demo_rollout)
-                demo_env.close()
-
                 summary = agent.demo_optimize(demo_lr_scheduler)
 
         curr_timestep += params.n_steps * params.n_envs
@@ -250,12 +249,17 @@ def main(args):
         if params.demo_multi:
             demo_rollout = MultiDemoStorage(observation_shape, params.hidden_size, params.demo_multi_steps, params.n_envs,
                                             device)
+            demo_buffer = DemoReplayBuffer(observation_shape, params.hidden_size, device,
+                                           max_samples=None,
+                                           sampling_strategy=params.demo_sampling_strategy,
+                                           mode=algo)
         else:
             demo_rollout = DemoStorage(device)
-        demo_buffer = DemoReplayBuffer(observation_shape, params.hidden_size, device,
-                                       max_samples=params.buffer_max_samples,
-                                       sampling_strategy=params.demo_sampling_strategy,
-                                       mode=algo)
+            demo_buffer = DemoReplayBuffer(observation_shape, params.hidden_size, device,
+                                           max_samples=params.buffer_max_samples,
+                                           sampling_strategy=params.demo_sampling_strategy,
+                                           mode=algo)
+
         print("Initialising controller...")
         controller = DemoScheduler(args, params)
         print("Initialising demonstrator...")

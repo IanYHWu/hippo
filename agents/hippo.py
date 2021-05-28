@@ -80,7 +80,7 @@ class HIPPO(PPO):
 
         # compute the advantages, the values and the action logits of the trajectories under the current AC
         self.demo_buffer.compute_estimates(self.actor_critic, gamma=self.gamma,
-                                                  lmbda=self.lmbda, normalise_adv=self.demo_normalise_adv)
+                                           lmbda=self.lmbda, normalise_adv=self.demo_normalise_adv)
 
         self.actor_critic.train()
         for e in range(self.demo_epochs):

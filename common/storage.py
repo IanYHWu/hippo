@@ -190,6 +190,7 @@ class MultiDemoStorage:
         self.num_steps = num_steps
         self.num_envs = num_envs
         self.device = device
+        self.env_counter = 0
         self.reset()
 
     def reset(self):
@@ -199,14 +200,15 @@ class MultiDemoStorage:
         self.rew_batch = torch.zeros(self.num_envs, self.num_steps)
         self.done_batch = torch.zeros(self.num_envs, self.num_steps)
         self.step = 0
+        self.env_counter = 0
 
     def store(self, obs, hidden_state, act, rew, done):
         """Insert demonstration trajectories"""
-        self.obs_batch[:, self.step] = torch.from_numpy(obs.copy())
-        self.hidden_states_batch[:, self.step] = torch.from_numpy(hidden_state.copy())
-        self.act_batch[:, self.step] = torch.from_numpy(act.copy())
-        self.rew_batch[:, self.step] = torch.from_numpy(rew.copy())
-        self.done_batch[:, self.step] = torch.from_numpy(done.copy())
+        self.obs_batch[self.env_counter, self.step] = torch.from_numpy(obs.copy())
+        self.hidden_states_batch[self.env_counter, self.step] = torch.from_numpy(hidden_state.copy())
+        self.act_batch[self.env_counter, self.step] = torch.from_numpy(act.copy())
+        self.rew_batch[self.env_counter, self.step] = torch.from_numpy(rew.copy())
+        self.done_batch[self.env_counter, self.step] = torch.from_numpy(done.copy())
         self.step = (self.step + 1) % self.num_steps
 
     @staticmethod
@@ -220,7 +222,7 @@ class MultiDemoStorage:
 
         return non_zero_tensor * mask
 
-    def _remove_cliffhangers(self):
+    def remove_cliffhangers(self):
         """Remove cliffhanger trajectories"""
         mask, non_zero_rows = self._generate_masks()
         self.obs_batch = self._remove_cliffhangers_helper(self.obs_batch, mask, non_zero_rows)
@@ -258,6 +260,9 @@ class MultiDemoStorage:
         self.mask_batch = mask
 
         return mask, non_zero_rows
+
+    def increment_env_counter(self):
+        self.env_counter += 1
 
 
 class DemoReplayBuffer:
@@ -378,15 +383,13 @@ class DemoReplayBuffer:
                     self.priorities = self.priorities[:-1, :]
 
         else:
-            assert self.mode == 'hippo'  # multi-trajectory mode only available for hippo
-            # if demo_multi = True, we just directly store the data
+            demo_store.remove_cliffhangers()
             self.obs_store = demo_store.obs_batch
             self.hidden_states_store = demo_store.hidden_states_batch
             self.act_store = demo_store.act_batch
             self.rew_store = demo_store.rew_batch
             self.mask_store = demo_store.mask_batch
             self.max_len = self.mask_store.shape[1]
-
             demo_store.reset()  # reset the demo_store after we extract data from it
 
     @staticmethod

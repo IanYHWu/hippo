@@ -98,7 +98,7 @@ tiny_hippo_multi:
     normalise_adv: True
     normalise_reward: True
     use_gae: True
-    algo: ppo_demo_hippo
+    algo: hippo
     architecture: ResNet
     recurrent: False
     hidden_size: 256
@@ -109,12 +109,14 @@ tiny_hippo_multi:
     demo_epochs: 10
     hot_start: 10
     buffer_max_samples: 100
-    num_demos: 10
+    num_demos: 1
     demo_schedule: linear
-    demo_learn_ratio: 1
-    demo_sampling_strategy: prioritised
+    demo_learn_ratio: 0.5
+    demo_sampling_strategy: uniform
     demo_entropy_coef: 0.01
     demo_value_coef: 0.005
     demo_multi: True
     demo_multi_steps: 256
+    demo_normalise_adv: False
+    demo_lr_schedule: False
 
