@@ -312,7 +312,6 @@ class DemoReplayBuffer:
             rewards = demo_store.rew_store
             trajectory_len = demo_store.trajectory_length
             demo_store.reset()  # reset the demo_store after we extract the data from it
-
             mask = torch.ones(trajectory_len).reshape(trajectory_len, 1)  # generate mask of ones, of trajectory length
 
             if self.prioritised and self.mode == 'il':
