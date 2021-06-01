@@ -187,18 +187,6 @@ class Logger:
         wandb.config.update(self.args)
 
 
-class ParamLoader:
-    def __init__(self, args):
-        with open('hyperparams/config.yml', 'r') as f:
-            params_dict = yaml.safe_load(f)[args.param_set]
-        self._generate_loader(params_dict)
-        self.wandb_id = None
-
-    def _generate_loader(self, params_dict):
-        for key, val in params_dict.items():
-            setattr(self, key, val)
-
-
 def load_args(root_path):
     args = parser.parse_args()
     print(args)
