@@ -12,7 +12,7 @@ from common.data_logging import Logger
 from common.storage import Storage
 from common.storage import DemoStorage, MultiDemoStorage
 from common.storage import DemoReplayBuffer
-from common.controller import DemoScheduler
+from common.controller import DemoScheduler, GAEController
 from test import Evaluator
 
 from agents.demonstrator import Oracle
@@ -125,6 +125,11 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                                 # if this level has yielded 10 bad trajectories, skip it
                                 break
 
+            demo_queries, demo_learning_count, demo_score = controller.get_stats()
+            print("Demonstration Statistics: {} queries, {} demo learning steps, {} demo score".
+                  format(demo_queries, demo_learning_count, demo_score))
+            logger.log_demo_stats(demo_queries, demo_learning_count, demo_score)
+
         # learning from single demo trajectories - optimise from the demonstrations
         if demo and not multi_demo:
             if controller.learn_from_demos(curr_timestep, always_learn=False):
@@ -166,11 +171,6 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
             print("Saving checkpoint: t = {}".format(curr_timestep))
             logger.save_checkpoint(actor_critic, curr_timestep)
             checkpoint_count += 1
-            if demo:
-                # print demo statistics - for debugging
-                demo_queries, demo_learning_count = controller.get_stats()
-                print("Demonstration Statistics: {} queries, {} demo learning steps".
-                      format(demo_queries, demo_learning_count))
 
     print("Training complete, saving final checkpoint")
     logger.save_checkpoint(actor_critic, curr_timestep)
@@ -260,6 +260,9 @@ def main(args):
         if params.demo_controller == 'linear_schedule':
             print("Using a linear schedule as the controller")
             controller = DemoScheduler(args, params, rollout, schedule='linear')
+        elif params.demo_controller == 'gae':
+            print('Using Average GAE Controller')
+            controller = GAEController(args, params, rollout)
         else:
             raise NotImplementedError
         print("Initialising demonstrator...")

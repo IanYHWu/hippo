@@ -68,11 +68,11 @@ tiny_hippo:
     demo_batch_size: 128
     demo_mini_batch_size: 64
     demo_epochs: 10
-    hot_start: 0
+    hot_start: 4
     buffer_max_samples: 4
     num_demo_queries: 10
     demo_controller: linear_schedule
-    num_demo_per_query: 2
+    num_demo_per_query: 5
     demo_learn_ratio: 0.1
     demo_sampling_strategy: uniform
     demo_entropy_coef: 0.01
@@ -118,3 +118,43 @@ tiny_hippo_multi:
     demo_normalise_adv: False
     demo_lr_schedule: False
 
+tiny_hippo_gae:
+    n_envs: 2
+    n_steps: 16
+    n_checkpoints: 2
+    epoch: 3
+    mini_batch_per_epoch: 8
+    mini_batch_size: 2048
+    gamma: 0.999
+    lmbda: 0.95
+    learning_rate: 0.0005
+    grad_clip_norm: 0.5
+    eps_clip: 0.2
+    value_coef: 0.5
+    entropy_coef: 0.01
+    normalise_adv: True
+    normalise_reward: True
+    use_gae: True
+    algo: hippo
+    architecture: ResNet
+    recurrent: False
+    hidden_size: 256
+    demo_coef: 0.5
+    demo_learning_rate: 0.0005
+    demo_batch_size: 128
+    demo_mini_batch_size: 64
+    demo_epochs: 10
+    hot_start: 4
+    buffer_max_samples: 10
+    num_demo_queries: 10
+    demo_controller: gae
+    rho: 1.05
+    weighting_coef: 0.4
+    demo_learn_ratio: 0.1
+    demo_sampling_strategy: uniform
+    demo_entropy_coef: 0.01
+    demo_value_coef: 0.005
+    demo_max_steps: 999
+    demo_multi: False
+    demo_normalise_adv: False
+    demo_lr_schedule: False
