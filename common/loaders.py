@@ -113,6 +113,8 @@ class ParamLoader:
         self.num_demo_queries = 10  # max no. of demo queries permitted
         self.hot_start = 0  # pre-loaded demonstrations
         self.demo_controller = 'linear_schedule'  # controller type
+        self.rho = 1.1  # For GAEController - multiplier to consider demonstration
+        self.weighting_coef = 0.3  # For GAEController - weighting coefficient for running averages
         self.num_demo_per_query = 1  # no. of trajectories per demo query. Used for schedule-type controllers
         self.demo_learn_ratio = 0.1  # ratio of demo-learning steps to env steps
         self.demo_sampling_strategy = 'uniform'
