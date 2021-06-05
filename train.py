@@ -128,7 +128,8 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
             demo_queries, demo_learning_count, demo_score = controller.get_stats()
             print("Demonstration Statistics: {} queries, {} demo learning steps, {} demo score".
                   format(demo_queries, demo_learning_count, demo_score))
-            logger.log_demo_stats(demo_queries, demo_learning_count, demo_score)
+            if args.log_demo_stats:
+                logger.log_demo_stats(demo_queries, demo_learning_count, demo_score)
 
         # learning from single demo trajectories - optimise from the demonstrations
         if demo and not multi_demo:
@@ -137,8 +138,9 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
 
         # learning from multiple demo trajectories - gather the trajectories and optimise
         if demo and multi_demo:
+            controller.store_seeds()
             if controller.learn_from_demos(curr_timestep, always_learn=False):
-                demo_level_seeds = extract_seeds(info)  # extract the current seeds of all n_envs environments
+                demo_level_seeds = controller.get_seeds()  # extract the current seeds of all n_envs environments
                 for seed in demo_level_seeds:
                     demo_env = load_env(args, params, demo=True, demo_level_seed=seed)
                     demo_obs = demo_env.reset()

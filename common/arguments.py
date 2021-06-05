@@ -72,6 +72,8 @@ parser.add_argument(
 parser.add_argument(
     '--oracle_path', type=str, default='', help='Path to synthetic oracle'
 )
-
+parser.add_argument(
+    '--log_demo_stats', action='store_true', help='Log demonstration statistics'
+)
 
 

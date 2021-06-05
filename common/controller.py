@@ -1,5 +1,6 @@
 import random
 import numpy as np
+from common.utils import extract_seeds
 
 
 class DemoScheduler:
@@ -15,6 +16,8 @@ class DemoScheduler:
         self.n_envs = params.n_envs
         self.n_steps = params.n_steps
         self.multi = params.demo_multi
+        self.multi_seed_sampling = params.multi_seed_sampling
+        self.seed_store = set()
 
         self.query_count = 0
         self.demo_learn_count = 0
@@ -44,6 +47,11 @@ class DemoScheduler:
             else:
                 return False
 
+    def store_seeds(self):
+        info = self.rollout.info_batch[-1]
+        seeds_list = extract_seeds(info)
+        self.seed_store.update(seeds_list)
+
     def _linear_schedule(self, curr_timestep):
         """Linear Scheduler"""
         demo_every = self.num_timesteps // self.num_demos
@@ -55,12 +63,20 @@ class DemoScheduler:
             return False
 
     def get_seeds(self, demos_per_step=2):
-        envs = np.random.randint(0, self.n_envs, demos_per_step)
-        seeds = []
-        for env in envs:
-            seed = self.rollout.info_batch[-1][env]['level_seed']
-            seeds.append(seed)
-        return seeds
+        if self.multi and self.multi_seed_sampling == 'latest':
+            info = self.rollout.info_batch[-1]
+            seeds = extract_seeds(info)
+            return seeds
+        elif self.multi and self.multi_seed_sampling == 'random':
+            seeds = random.choices(tuple(self.seed_store), k=self.n_envs)
+            return seeds
+        elif not self.multi:
+            envs = np.random.randint(0, self.n_envs, demos_per_step)
+            seeds = []
+            for env in envs:
+                seed = self.rollout.info_batch[-1][env]['level_seed']
+                seeds.append(seed)
+            return seeds
 
     def get_stats(self):
         return self.query_count, self.demo_learn_count, 0.0
@@ -126,8 +142,6 @@ class GAEController:
         demo_seeds = []
         adv_list, seed_list = self._compute_avg_adv()
         self._update_running_avg(adv_list)
-        if adv_list:
-            print(adv_list)
         for adv, seed in zip(adv_list, seed_list):
             if adv > self.rho * self.running_avg:
                 demo_seeds.append(seed)

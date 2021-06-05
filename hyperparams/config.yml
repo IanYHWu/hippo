@@ -115,6 +115,7 @@ tiny_hippo_multi:
     demo_value_coef: 0.005
     demo_multi: True
     demo_multi_steps: 256
+    multi_seed_sampling: random
     demo_normalise_adv: False
     demo_lr_schedule: False
 
