@@ -21,6 +21,7 @@ class Logger:
         self.root_path = None
         self.checkpoint_path = None
         self.log_path = None
+        self.demo_log_path = None
         self.n_envs = params.n_envs
         self.log_wandb = log_wandb
 
@@ -55,6 +56,7 @@ class Logger:
         self.root_path = root_path
         self.checkpoint_path = checkpoint_path + '/checkpoint'
         self.log_path = self.root_path + '/' + self.name + '.csv'
+        self.demo_log_path = self.root_path + '/' + self.name + '_demos.csv'
 
     def save_checkpoint(self, model, curr_timestep):
         torch.save({
@@ -103,6 +105,12 @@ class Logger:
 
     def _check_log_exists(self):
         if os.path.isfile(self.log_path):
+            return True
+        else:
+            return False
+
+    def _check_demo_log_exists(self):
+        if os.path.isfile(self.demo_log_path):
             return True
         else:
             return False
@@ -174,6 +182,24 @@ class Logger:
 
         return episode_statistics
 
+    def log_demo_stats(self, num_queries, num_learn, score):
+        results = [self.curr_timestep] + [num_queries] + [num_learn] + [score]
+        if self._check_demo_log_exists():
+            df = pd.read_csv(self.demo_log_path, index_col=0)
+            df = df[df.timesteps != self.curr_timestep]
+            df.loc[len(df)] = np.array(results)
+            df.to_csv(self.demo_log_path)
+        else:
+            df = pd.DataFrame(np.array([results]),
+                              columns=['timesteps', 'num_queries', 'num_learn', 'score'])
+            df.to_csv(self.demo_log_path)
+
+        if self.log_wandb:
+            wandb.log({'timesteps': self.curr_timestep,
+                       'num_queries': num_queries,
+                       'num_learn': num_learn,
+                       'score': score})
+
     def _initialise_wandb(self):
         if self.args.load_checkpoint:
             wandb_id = self.params.wandb_id
@@ -185,18 +211,6 @@ class Logger:
             self.params.wandb_id = wandb_id
         wandb.config.update(self.params)
         wandb.config.update(self.args)
-
-
-class ParamLoader:
-    def __init__(self, args):
-        with open('hyperparams/config.yml', 'r') as f:
-            params_dict = yaml.safe_load(f)[args.param_set]
-        self._generate_loader(params_dict)
-        self.wandb_id = None
-
-    def _generate_loader(self, params_dict):
-        for key, val in params_dict.items():
-            setattr(self, key, val)
 
 
 def load_args(root_path):

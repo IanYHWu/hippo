@@ -4,7 +4,7 @@ import torch.optim as optim
 import numpy as np
 
 
-class PPODemoHIPPO(PPO):
+class HIPPO(PPO):
 
     def __init__(self,
                  env,
@@ -65,7 +65,7 @@ class PPODemoHIPPO(PPO):
         batch_size = self.demo_batch_size
         # the batch size must be <= than the number of non-padding transitions in the trajectory
         if n_valid_transitions < batch_size:
-            batch_size = n_valid_transitions
+            batch_size = n_valid_transitions.item()
         mini_batch_size = self.demo_mini_batch_size
         # the mini-batch size must be <= the batch size
         if batch_size < mini_batch_size:
@@ -79,8 +79,8 @@ class PPODemoHIPPO(PPO):
         demo_optimizer = optim.Adam(self.actor_critic.parameters(), lr=lr, eps=1e-5)
 
         # compute the advantages, the values and the action logits of the trajectories under the current AC
-        self.demo_buffer.compute_hippo_advantages(self.actor_critic, gamma=self.gamma,
-                                                  lmbda=self.lmbda, normalise_adv=self.demo_normalise_adv)
+        self.demo_buffer.compute_estimates(self.actor_critic, gamma=self.gamma,
+                                           lmbda=self.lmbda, normalise_adv=self.demo_normalise_adv)
 
         self.actor_critic.train()
         for e in range(self.demo_epochs):
@@ -130,7 +130,7 @@ class PPODemoHIPPO(PPO):
         return summary
 
 
-def get_args_demo_hippo(params):
+def get_args_hippo(params):
     param_dict = {'n_steps': params.n_steps,
                   'n_envs': params.n_envs,
                   'epoch': params.epoch,
