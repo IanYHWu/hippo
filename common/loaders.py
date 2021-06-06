@@ -113,16 +113,20 @@ class ParamLoader:
         self.num_demo_queries = 10  # max no. of demo queries permitted
         self.hot_start = 0  # pre-loaded demonstrations
         self.demo_controller = 'linear_schedule'  # controller type
-        self.rho = 1.1  # For GAEController - multiplier to consider demonstration
-        self.weighting_coef = 0.3  # For GAEController - weighting coefficient for running averages
+        self.rho = 1.1  # for GAEController - multiplier to consider demonstration
+        self.weighting_coef = 0.3  # for GAEController - weighting coefficient for running averages
         self.num_demo_per_query = 1  # no. of trajectories per demo query. Used for schedule-type controllers
         self.demo_learn_ratio = 0.1  # ratio of demo-learning steps to env steps
         self.demo_sampling_strategy = 'uniform'
+        self.seed_sampling = 'random'
+        self.use_replay = False
+        self.num_demo_seeds = self.n_envs
         self.demo_entropy_coef = 0.01
         self.demo_value_coef = 0.005
         self.demo_max_steps = 999  # max acceptable length of demo trajectories
-        self.demo_multi = False  # multi mode. Used for schedule-type controllers
-        self.demo_multi_steps = 256  # rollout length for demos. Used for multi mode only
+        self.use_replay = False  # treat the DemoBuffer as a replay buffer
+        self.use_demo_store = False  # store demos and re-use by seed
+        self.demo_store_max_samples = 200
         self.demo_normalise_adv = False  # normalise demo advantages
         self.demo_lr_schedule = False  # learning rate scheduler for demo learning steps
 
