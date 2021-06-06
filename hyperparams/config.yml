@@ -42,7 +42,7 @@ tiny:
     recurrent: False
     hidden_size: 256
 
-tiny_hippo:
+tiny_hippo_replay:
     n_envs: 2
     n_steps: 16
     n_checkpoints: 2
@@ -82,7 +82,7 @@ tiny_hippo:
     demo_normalise_adv: False
     demo_lr_schedule: False
 
-tiny_hippo_multi:
+tiny_hippo:
     n_envs: 2
     n_steps: 16
     n_checkpoints: 2
@@ -110,12 +110,15 @@ tiny_hippo_multi:
     demo_epochs: 10
     demo_controller: linear_schedule
     demo_learn_ratio: 0.5
-    demo_sampling_strategy: uniform
     demo_entropy_coef: 0.01
     demo_value_coef: 0.005
-    demo_multi: True
-    demo_multi_steps: 256
-    multi_seed_sampling: random
+    demo_max_steps: 999
+    num_demo_seeds: 2
+    buffer_max_samples: 2
+    use_demo_store: True
+    demo_store_max_samples: 200
+    use_replay: False
+    seed_sampling: latest
     demo_normalise_adv: False
     demo_lr_schedule: False
 

@@ -7,11 +7,12 @@ from common.loaders import ParamLoader
 from common.data_logging import load_args
 from common.loaders import load_env, load_model, load_agent
 from common.arguments import parser
-from common.utils import set_global_log_levels, set_global_seeds, extract_seeds, DemoLRScheduler
+from common.utils import set_global_log_levels, set_global_seeds, DemoLRScheduler
 from common.data_logging import Logger
-from common.storage import Storage
-from common.storage import DemoStorage, MultiDemoStorage
-from common.storage import DemoReplayBuffer
+from common.rollout import Rollout
+from common.rollout import DemoRollout
+from common.rollout import DemoBuffer
+from common.rollout import DemoStorage
 from common.controller import DemoScheduler, GAEController
 from test import Evaluator
 
@@ -19,29 +20,21 @@ from agents.demonstrator import Oracle
 
 
 def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params, evaluator=None,
-          controller=None, demo_rollout=None, demo_buffer=None, demonstrator=None):
+          controller=None, demo_rollout=None, demo_buffer=None, demo_storage=None, demonstrator=None):
     """
     Main training loop
     """
-    save_every = num_timesteps // params.n_checkpoints
-    checkpoint_count = 0
-    obs = env.reset()
-    hidden_state = np.zeros((params.n_envs, rollout.hidden_state_size))
-    done = np.zeros(params.n_envs)
-    start_ = time.time()
-
     if params.algo == 'hippo':
         demo = True
         demo_lr_scheduler = DemoLRScheduler(args, params)
-        if params.demo_multi:
-            multi_demo = True
-            print("Using Multiple Demonstrations")
+        if params.use_replay:
+            replay = True
+            print("Using Replay")
         else:
-            multi_demo = False
-            print("Using Single Demonstrations")
+            replay = False
 
         # if hot start, load hot start trajectories into the buffer
-        if not multi_demo and params.hot_start:
+        if replay and params.hot_start:
             print("Hot Start - {} Demonstrations".format(params.hot_start))
             for i in range(0, params.hot_start):
                 valid = False  # keeps track of whether the current trajectory is valid
@@ -55,25 +48,36 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                     while demo_done[0] == 0:
                         demo_act, demo_next_hidden_state = demonstrator.predict(demo_obs, demo_hidden_state, demo_done)
                         demo_next_obs, demo_rew, demo_done, demo_info = demo_env.step(demo_act)
-                        demo_rollout.store(demo_obs, demo_hidden_state, demo_act, demo_rew)
+                        demo_rollout.store(demo_obs, demo_hidden_state, demo_act, demo_rew, demo_done)
                         demo_obs = demo_next_obs
                         demo_hidden_state = demo_next_hidden_state
                         step_count += 1
                     if step_count < params.demo_max_steps:
                         # valid trajectories defined by whether they are shorter than demo_max_steps
-                        demo_buffer.store(demo_rollout)
+                        obs, hidden_state, act, rew, done = demo_rollout.get_demo_trajectory()
+                        demo_buffer.store(obs, hidden_state, act, rew, done)
+                        demo_rollout.reset()
                         demo_env.close()
                         valid = True
                     else:
                         demo_rollout.reset()
                         demo_env.close()
-    else:
+    elif params.algo == 'ppo':
         demo = False
-        multi_demo = False
+        replay = False
         demo_lr_scheduler = None
+    else:
+        raise NotImplementedError
 
     print("Now training...")
     # main PPO training loop
+    save_every = num_timesteps // params.n_checkpoints
+    checkpoint_count = 0
+    obs = env.reset()
+    hidden_state = np.zeros((params.n_envs, rollout.hidden_state_size))
+    done = np.zeros(params.n_envs)
+    start_ = time.time()
+
     while curr_timestep < num_timesteps:
         actor_critic.eval()
         if demonstrator is not None:
@@ -90,72 +94,105 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
         summary = agent.optimize()
 
         # learning from single demo trajectories - loop to gather trajectories
-        if demo and not multi_demo:
-            if controller.query_demonstrator(curr_timestep):
+        if demo:
+            controller.store_seeds()
+            if replay and controller.query_demonstrator(curr_timestep):
+                sample_demo = True
+            elif not replay and controller.learn_from_demos(curr_timestep):
+                sample_demo = True
+            else:
+                sample_demo = False
+            if sample_demo:
                 # query the oracle for a single demonstration
                 demo_level_seeds = controller.get_seeds()
-                for demo_level_seed in demo_level_seeds:
-                    tries = 0  # keeps track of how many times this level has been tried
-                    valid = False
-                    while not valid:
-                        step_count = 0
-                        demo_env = load_env(args, params, demo=True, demo_level_seed=demo_level_seed)
-                        demo_obs = demo_env.reset()
-                        demo_hidden_state = np.zeros((1, rollout.hidden_state_size))
-                        demo_done = np.zeros(1)
-                        while demo_done[0] == 0:
-                            demo_act, demo_next_hidden_state = demonstrator.predict(demo_obs, demo_hidden_state, demo_done)
-                            demo_next_obs, demo_rew, demo_done, demo_info = demo_env.step(demo_act)
-                            # demo_rollout stores a single trajectory
-                            demo_rollout.store(demo_obs, demo_hidden_state, demo_act, demo_rew)
-                            demo_obs = demo_next_obs
-                            demo_hidden_state = demo_next_hidden_state
-                            step_count += 1
-                        if step_count < params.demo_max_steps:
-                            # if the trajectory is valid, compute returns and store it
-                            demo_buffer.store(demo_rollout)  # store the trajectory in demo_buffer and reset demo_rollout
-                            demo_env.close()
-                            valid = True
+                for seed in demo_level_seeds:
+                    if params.use_demo_store:
+                        if demo_storage.check_guide(seed):
+                            demo_obs_t, demo_hidden_state_t, demo_act_t, demo_rew_t, demo_done_t = demo_storage.get_demo_trajectory(
+                                seed)
+                            demo_buffer.store(demo_obs_t, demo_hidden_state_t, demo_act_t, demo_rew_t, demo_done_t)
                         else:
-                            # else, reset the env and rollout, and then try again
-                            demo_rollout.reset()
-                            demo_env.close()
-                            tries += 1
-                            if tries == 10:
-                                # if this level has yielded 10 bad trajectories, skip it
-                                break
+                            tries = 0  # keeps track of how many times this level has been tried
+                            valid = False
+                            while not valid:
+                                step_count = 0
+                                demo_env = load_env(args, params, demo=True, demo_level_seed=seed)
+                                demo_obs = demo_env.reset()
+                                demo_hidden_state = np.zeros((1, rollout.hidden_state_size))
+                                demo_done = np.zeros(1)
+                                while demo_done[0] == 0 and step_count < params.demo_max_steps:
+                                    demo_act, demo_next_hidden_state = demonstrator.predict(demo_obs, demo_hidden_state,
+                                                                                            demo_done)
+                                    demo_next_obs, demo_rew, demo_done, demo_info = demo_env.step(demo_act)
+                                    # demo_rollout stores a single trajectory
+                                    demo_rollout.store(demo_obs, demo_hidden_state, demo_act, demo_rew, demo_done)
+                                    demo_obs = demo_next_obs
+                                    demo_hidden_state = demo_next_hidden_state
+                                    step_count += 1
+                                if step_count < params.demo_max_steps:
+                                    # if the trajectory is valid, compute returns and store it
+                                    demo_storage.update_guide(seed)
+                                    demo_obs_t, demo_hidden_state_t, demo_act_t, demo_rew_t, demo_done_t = demo_rollout.get_demo_trajectory()
+                                    demo_buffer.store(demo_obs_t, demo_hidden_state_t, demo_act_t, demo_rew_t,
+                                                      demo_done_t)
+                                    demo_storage.store(demo_obs_t, demo_hidden_state_t, demo_act_t, demo_rew_t,
+                                                       demo_done_t)
+                                    demo_rollout.reset()
+                                    demo_env.close()
+                                    valid = True
+                                else:
+                                    # else, reset the env and rollout, and then try again
+                                    demo_rollout.reset()
+                                    demo_env.close()
+                                    tries += 1
+                                    if tries == 10:
+                                        # if this level has yielded 10 bad trajectories, skip it
+                                        break
+                    else:
+                        tries = 0  # keeps track of how many times this level has been tried
+                        valid = False
+                        while not valid:
+                            step_count = 0
+                            demo_env = load_env(args, params, demo=True, demo_level_seed=seed)
+                            demo_obs = demo_env.reset()
+                            demo_hidden_state = np.zeros((1, rollout.hidden_state_size))
+                            demo_done = np.zeros(1)
+                            while demo_done[0] == 0 and step_count < params.demo_max_steps:
+                                demo_act, demo_next_hidden_state = demonstrator.predict(demo_obs, demo_hidden_state,
+                                                                                        demo_done)
+                                demo_next_obs, demo_rew, demo_done, demo_info = demo_env.step(demo_act)
+                                # demo_rollout stores a single trajectory
+                                demo_rollout.store(demo_obs, demo_hidden_state, demo_act, demo_rew, demo_done)
+                                demo_obs = demo_next_obs
+                                demo_hidden_state = demo_next_hidden_state
+                                step_count += 1
+                            if step_count < params.demo_max_steps:
+                                # if the trajectory is valid, compute returns and store it
+                                demo_obs_t, demo_hidden_state_t, demo_act_t, demo_rew_t, demo_done_t = demo_rollout.get_demo_trajectory()
+                                demo_buffer.store(demo_obs_t, demo_hidden_state_t, demo_act_t, demo_rew_t, demo_done_t)
+                                demo_rollout.reset()
+                                demo_env.close()
+                                valid = True
+                            else:
+                                # else, reset the env and rollout, and then try again
+                                demo_rollout.reset()
+                                demo_env.close()
+                                tries += 1
+                                if tries == 10:
+                                    # if this level has yielded 10 bad trajectories, skip it
+                                    break
+
+            # learning from single demo trajectories - optimise from the demonstrations
+            if controller.learn_from_demos(curr_timestep, always_learn=False):
+                summary = agent.demo_optimize(demo_lr_scheduler)
+                if not replay:
+                    demo_buffer.reset()
 
             demo_queries, demo_learning_count, demo_score = controller.get_stats()
             print("Demonstration Statistics: {} queries, {} demo learning steps, {} demo score".
                   format(demo_queries, demo_learning_count, demo_score))
             if args.log_demo_stats:
                 logger.log_demo_stats(demo_queries, demo_learning_count, demo_score)
-
-        # learning from single demo trajectories - optimise from the demonstrations
-        if demo and not multi_demo:
-            if controller.learn_from_demos(curr_timestep, always_learn=False):
-                summary = agent.demo_optimize(demo_lr_scheduler)
-
-        # learning from multiple demo trajectories - gather the trajectories and optimise
-        if demo and multi_demo:
-            controller.store_seeds()
-            if controller.learn_from_demos(curr_timestep, always_learn=False):
-                demo_level_seeds = controller.get_seeds()  # extract the current seeds of all n_envs environments
-                for seed in demo_level_seeds:
-                    demo_env = load_env(args, params, demo=True, demo_level_seed=seed)
-                    demo_obs = demo_env.reset()
-                    demo_hidden_state = np.zeros((1, rollout.hidden_state_size))
-                    demo_done = np.zeros(1)
-                    for step in range(params.demo_multi_steps):
-                        demo_act, demo_next_hidden_state = demonstrator.predict(demo_obs, demo_hidden_state, demo_done)
-                        demo_next_obs, demo_rew, demo_done, demo_info = demo_env.step(demo_act)
-                        demo_rollout.store(demo_obs, demo_hidden_state, demo_act, demo_rew, demo_done)
-                        demo_obs = demo_next_obs
-                        demo_hidden_state = demo_next_hidden_state
-                    demo_rollout.increment_env_counter()
-                    demo_env.close()
-                demo_buffer.store(demo_rollout)
-                summary = agent.demo_optimize(demo_lr_scheduler)
 
         curr_timestep += params.n_steps * params.n_envs
         rew_batch, done_batch = rollout.fetch_log_data()  # fetch rewards and done data from the rollout
@@ -221,11 +258,10 @@ def main(args):
         print("Loading checkpoint: {}".format(args.log_dir + '/' + args.name))
         actor_critic, curr_timestep = logger.load_checkpoint(actor_critic)
         print("Current timestep = {}".format(curr_timestep))
-
     observation_shape = env.observation_space.shape
 
     print("Initialising storage...")
-    rollout = Storage(observation_shape, params.hidden_size, params.n_steps, params.n_envs, device)
+    rollout = Rollout(observation_shape, params.hidden_size, params.n_steps, params.n_envs, device)
 
     if args.evaluate:
         print("Initialising evaluator...")
@@ -243,20 +279,16 @@ def main(args):
         raise NotImplementedError
 
     if algo == 'hippo':
-        print("Initialising demonstration storage and buffer...")
-        if params.demo_multi:
-            demo_rollout = MultiDemoStorage(observation_shape, params.hidden_size, params.demo_multi_steps, params.n_envs,
-                                            device)
-            demo_buffer = DemoReplayBuffer(observation_shape, params.hidden_size, device,
-                                           max_samples=None,
-                                           sampling_strategy=params.demo_sampling_strategy,
-                                           mode=algo)
+        print("Initialising demonstration rollout and buffer...")
+        demo_rollout = DemoRollout(observation_shape, params.hidden_size, params.demo_max_steps, device)
+        demo_buffer = DemoBuffer(observation_shape, params.hidden_size, params.buffer_max_samples,
+                                 params.demo_max_steps, device)
+        if params.use_demo_store:
+            print("Initialising demonstration storage")
+            demo_storage = DemoStorage(observation_shape, params.hidden_size, params.demo_store_max_samples,
+                                       params.demo_max_steps, device)
         else:
-            demo_rollout = DemoStorage(device)
-            demo_buffer = DemoReplayBuffer(observation_shape, params.hidden_size, device,
-                                           max_samples=params.buffer_max_samples,
-                                           sampling_strategy=params.demo_sampling_strategy,
-                                           mode=algo)
+            demo_storage = None
 
         print("Initialising controller...")
         if params.demo_controller == 'linear_schedule':
@@ -273,7 +305,7 @@ def main(args):
         print("Initialising agent...")
         agent = load_agent(env, actor_critic, rollout, device, params=params, demo_buffer=demo_buffer)
         train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params, evaluator,
-              controller, demo_rollout, demo_buffer, demonstrator)
+              controller, demo_rollout, demo_buffer, demo_storage, demonstrator)
     else:
         print("Initialising agent...")
         agent = load_agent(env, actor_critic, rollout, device, params)
