@@ -15,8 +15,9 @@ class DemoScheduler:
         self.rollout = rollout
         self.n_envs = params.n_envs
         self.n_steps = params.n_steps
-        self.multi = params.demo_multi
-        self.multi_seed_sampling = params.multi_seed_sampling
+        self.seed_sampling = params.seed_sampling
+        self.num_demo_seeds = params.num_demo_seeds
+        self.replay = params.use_replay
         self.seed_store = set()
 
         self.query_count = 0
@@ -38,11 +39,13 @@ class DemoScheduler:
         if always_learn:
             return True
         learn_every = (1 / self.demo_learn_ratio) * self.n_envs * self.n_steps
-        if not self.multi and self.buffer_empty:
+        if self.replay and self.buffer_empty:
             return False
         else:
             if curr_timestep > ((self.demo_learn_count + 1) * learn_every):
                 self.demo_learn_count += 1
+                if not self.replay:
+                    self.query_count += 1
                 return True
             else:
                 return False
@@ -62,21 +65,19 @@ class DemoScheduler:
         else:
             return False
 
-    def get_seeds(self, demos_per_step=2):
-        if self.multi and self.multi_seed_sampling == 'latest':
-            info = self.rollout.info_batch[-1]
-            seeds = extract_seeds(info)
-            return seeds
-        elif self.multi and self.multi_seed_sampling == 'random':
-            seeds = random.choices(tuple(self.seed_store), k=self.n_envs)
-            return seeds
-        elif not self.multi:
-            envs = np.random.randint(0, self.n_envs, demos_per_step)
+    def get_seeds(self):
+        if self.seed_sampling == 'latest':
+            envs = np.random.randint(0, self.n_envs, self.num_demo_seeds)
             seeds = []
             for env in envs:
                 seed = self.rollout.info_batch[-1][env]['level_seed']
                 seeds.append(seed)
             return seeds
+        elif self.seed_sampling == 'random':
+            seeds = random.choices(tuple(self.seed_store), k=self.num_demo_seeds)
+            return seeds
+        else:
+            raise NotImplementedError
 
     def get_stats(self):
         return self.query_count, self.demo_learn_count, 0.0
