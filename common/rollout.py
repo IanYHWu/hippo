@@ -206,7 +206,6 @@ class DemoStorage:
             self.curr_ind = 0
 
     def update_guide(self, seed):
-        print(self.guide)
         self.guide[seed] = self.curr_ind
 
     def check_guide(self, seed):
@@ -267,7 +266,6 @@ class DemoBuffer:
         if self.curr_ind >= self.max_samples:
             self.curr_ind = 0
             self.buffer_full = True
-        print(self.act_store)
 
     @staticmethod
     def generate_sample_mask(done_trajectory):
