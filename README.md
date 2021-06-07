@@ -28,8 +28,11 @@ Additional arguments can be found in `common/arguments.py`.
 Performance on Caveflyer (Easy, 200 Levels)
 
 Pink: Demonstration-learning step every 5 environment-learning steps
+
 Brown: Demonstration-learning step every 10 environment-learning steps
+
 Purple: Demonstration-learning step every 100 environment-learning steps
+
 Green: PPO Baseline 
 
 
