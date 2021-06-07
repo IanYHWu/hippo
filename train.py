@@ -95,13 +95,15 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
 
         # learning from single demo trajectories - loop to gather trajectories
         if demo:
-            controller.store_seeds()
+            learn_from_demos = False
             if replay and controller.query_demonstrator(curr_timestep):
                 sample_demo = True
             elif not replay and controller.learn_from_demos(curr_timestep):
                 sample_demo = True
+                learn_from_demos = True
             else:
                 sample_demo = False
+
             if sample_demo:
                 # query the oracle for a single demonstration
                 demo_level_seeds = controller.get_seeds()
@@ -183,15 +185,18 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                                     break
 
             # learning from single demo trajectories - optimise from the demonstrations
-            if controller.learn_from_demos(curr_timestep, always_learn=False):
+            if replay and controller.learn_from_demos(curr_timestep, always_learn=False):
+                learn_from_demos = True
+
+            if learn_from_demos:
                 summary = agent.demo_optimize(demo_lr_scheduler)
                 if not replay:
                     demo_buffer.reset()
 
-            demo_queries, demo_learning_count, demo_score = controller.get_stats()
-            print("Demonstration Statistics: {} queries, {} demo learning steps, {} demo score".
-                  format(demo_queries, demo_learning_count, demo_score))
             if args.log_demo_stats:
+                demo_queries, demo_learning_count, demo_score = controller.get_stats()
+                print("Demonstration Statistics: {} queries, {} demo learning steps, {} demo score".
+                      format(demo_queries, demo_learning_count, demo_score))
                 logger.log_demo_stats(demo_queries, demo_learning_count, demo_score)
 
         curr_timestep += params.n_steps * params.n_envs
