@@ -112,7 +112,7 @@ tiny_hippo:
     demo_learn_ratio: 0.5
     demo_entropy_coef: 0.01
     demo_value_coef: 0.005
-    demo_max_steps: 999
+    demo_max_steps: 256
     num_demo_seeds: 2
     buffer_max_samples: 2
     use_demo_store: False
