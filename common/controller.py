@@ -18,7 +18,7 @@ class DemoScheduler:
         self.seed_sampling = params.seed_sampling
         self.num_demo_seeds = params.num_demo_seeds
         self.replay = params.use_replay
-        self.seed_store = set()
+        self.num_levels = args.num_levels
 
         self.query_count = 0
         self.demo_learn_count = 0
@@ -50,11 +50,6 @@ class DemoScheduler:
             else:
                 return False
 
-    def store_seeds(self):
-        info = self.rollout.info_batch[-1]
-        seeds_list = extract_seeds(info)
-        self.seed_store.update(seeds_list)
-
     def _linear_schedule(self, curr_timestep):
         """Linear Scheduler"""
         demo_every = self.num_timesteps // self.num_demos
@@ -74,8 +69,8 @@ class DemoScheduler:
                 seeds.append(seed)
             return seeds
         elif self.seed_sampling == 'random':
-            seeds = random.choices(tuple(self.seed_store), k=self.num_demo_seeds)
-            return seeds
+            seeds = np.random.randint(0, self.num_levels, self.num_demo_seeds)
+            return seeds.tolist()
         else:
             raise NotImplementedError
 
