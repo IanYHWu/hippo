@@ -293,12 +293,12 @@ class DemoBuffer:
         with torch.no_grad():
             num_samples = self.get_n_samples()
             for i in range(num_samples):
-                dist_batch, val_batch, _ = actor_critic(self.obs_store[i].squeeze(1).float().to(self.device),
+                dist_batch, val_batch, _ = actor_critic(self.obs_store[i].float().to(self.device),
                                                         self.hidden_states_store[i].float().to(self.device),
                                                         self.mask_store[i].float().to(self.device))
                 log_prob_act_batch = dist_batch.log_prob(self.act_store[i].to(self.device))
-                self.value_store[i, :] = val_batch * self.sample_mask_store[i, :]
-                self.log_prob_act_store[i, :] = log_prob_act_batch
+                self.value_store[i, :] = val_batch.cpu() * self.sample_mask_store[i, :]
+                self.log_prob_act_store[i, :] = log_prob_act_batch.cpu()
 
     def compute_estimates(self, actor_critic, gamma=0.99, lmbda=0.95, normalise_adv=False):
         """Compute the advantages of the transitions - used for HIPPO"""
