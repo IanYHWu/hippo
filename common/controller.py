@@ -16,6 +16,7 @@ class DemoScheduler:
         self.n_envs = params.n_envs
         self.n_steps = params.n_steps
         self.seed_sampling = params.seed_sampling
+        self.hot_start_seed_sampling = params.hot_start_seed_sampling
         self.num_demo_seeds = params.num_demo_seeds
         self.replay = params.use_replay
         self.num_levels = args.num_levels
@@ -60,19 +61,32 @@ class DemoScheduler:
         else:
             return False
 
-    def get_seeds(self):
-        if self.seed_sampling == 'latest':
-            envs = np.random.randint(0, self.n_envs, self.num_demo_seeds)
-            seeds = []
-            for env in envs:
-                seed = self.rollout.info_batch[-1][env]['level_seed']
-                seeds.append(seed)
-            return seeds
-        elif self.seed_sampling == 'random':
-            seeds = np.random.randint(0, self.num_levels, self.num_demo_seeds)
-            return seeds.tolist()
+    def get_seeds(self, hot_start_mode=False):
+        if hot_start_mode:
+            if self.hot_start_seed_sampling == 'random':
+                seeds = np.random.randint(0, self.num_levels, self.hot_start)
+                return seeds.tolist()
+            elif self.hot_start_seed_sampling == 'fixed':
+                if self.hot_start > self.num_levels:
+                    print("Warning: evaluation seeds used for hot start")
+                    print("Consider reducing the number of hot start trajectories")
+                seeds = [i for i in range(0, self.hot_start)]
+                return seeds
+            else:
+                raise NotImplementedError
         else:
-            raise NotImplementedError
+            if self.seed_sampling == 'latest':
+                envs = np.random.randint(0, self.n_envs, self.num_demo_seeds)
+                seeds = []
+                for env in envs:
+                    seed = self.rollout.info_batch[-1][env]['level_seed']
+                    seeds.append(seed)
+                return seeds
+            elif self.seed_sampling == 'random':
+                seeds = np.random.randint(0, self.num_levels, self.num_demo_seeds)
+                return seeds.tolist()
+            else:
+                raise NotImplementedError
 
     def get_stats(self):
         return self.query_count, self.demo_learn_count, 0.0

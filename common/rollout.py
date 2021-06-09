@@ -343,6 +343,7 @@ class DemoBuffer:
                 val_batch = torch.FloatTensor(self.value_store.float()).reshape(-1)[indices].to(self.device)
                 returns_batch = torch.FloatTensor(self.returns_store.float()).reshape(-1)[indices].to(self.device)
                 adv_batch = torch.FloatTensor(self.adv_store.float()).reshape(-1)[indices].to(self.device)
+
                 yield obs_batch, hidden_state_batch, act_batch, returns_batch, \
                       mask_batch, log_prob_act_batch, val_batch, adv_batch
         else:
