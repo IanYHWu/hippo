@@ -112,6 +112,7 @@ class ParamLoader:
         self.buffer_max_samples = 100  # max capacity of demo buffer
         self.num_demo_queries = 10  # max no. of demo queries permitted
         self.hot_start = 0  # pre-loaded demonstrations
+        self.hot_start_seed_sampling = 'random'
         self.demo_controller = 'linear_schedule'  # controller type
         self.rho = 1.1  # for GAEController - multiplier to consider demonstration
         self.weighting_coef = 0.3  # for GAEController - weighting coefficient for running averages

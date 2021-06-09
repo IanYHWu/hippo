@@ -65,20 +65,21 @@ tiny_hippo_replay:
     hidden_size: 256
     demo_coef: 0.5
     demo_learning_rate: 0.0005
-    demo_batch_size: 128
-    demo_mini_batch_size: 64
-    demo_epochs: 10
+    demo_batch_size: 32
+    demo_mini_batch_size: 16
+    demo_epochs: 3
     hot_start: 4
-    buffer_max_samples: 4
+    hot_start_seed_sampling: fixed
+    buffer_max_samples: 10
     num_demo_queries: 10
     demo_controller: linear_schedule
-    num_demo_per_query: 5
+    num_demo_seeds: 3
     demo_learn_ratio: 0.1
-    demo_sampling_strategy: uniform
+    use_demo_store: False
+    use_replay: True
     demo_entropy_coef: 0.01
     demo_value_coef: 0.005
-    demo_max_steps: 999
-    demo_multi: False
+    demo_max_steps: 256
     demo_normalise_adv: False
     demo_lr_schedule: False
 
