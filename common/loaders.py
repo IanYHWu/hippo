@@ -1,3 +1,5 @@
+"""Module for loading functions - used to load a variety of different objects"""
+
 from procgen import ProcgenEnv
 from envs.procgen_wrappers import *
 from common.model import *
@@ -8,21 +10,31 @@ import yaml
 
 
 def load_env(args, params, eval=False, demo=False, demo_level_seed=None, eval_seed=None):
+    """Load the Procgen environment
+        args: argparse object
+        params: ParamLoader object
+        eval: flag for evaluation mode
+        demo: flag for demonstration mode
+        demo_level_seed: seed for demonstration mode
+        eval_seed: seed for evaluation mode
+    """
     if not demo and not eval:
+        # regular environment-learning mode
         env = ProcgenEnv(num_envs=params.n_envs,
                          env_name=args.env_name,
                          start_level=args.start_level,
                          num_levels=args.num_levels,
                          distribution_mode=args.distribution_mode)
     elif demo and not eval:
-        demo_level_seed = np.array([demo_level_seed], dtype='int32')
+        # demonstration-collecting mode
+        demo_level_seed = np.array([demo_level_seed], dtype='int32')  # it seems to bug out if we don't convert to numpy
         env = ProcgenEnv(num_envs=1,
                          env_name=args.env_name,
                          start_level=demo_level_seed,
                          num_levels=1,
                          distribution_mode=args.distribution_mode)
     else:
-        # for evaluation
+        # for evaluation mode
         env = ProcgenEnv(num_envs=1,
                          env_name=args.env_name,
                          start_level=eval_seed,
@@ -40,6 +52,7 @@ def load_env(args, params, eval=False, demo=False, demo_level_seed=None, eval_se
 
 
 def load_model(params, env, device):
+    """Load an actor critic policy"""
     observation_shape = env.observation_space.shape
     action_size = env.action_space.n
     architecture = params.architecture
@@ -69,6 +82,7 @@ def load_model(params, env, device):
 
 
 def load_agent(env, actor_critic, storage, device, params, demo_buffer=None):
+    """Load an RL Agent"""
     if params.algo == "ppo":
         params_dict = get_args(params)
         agent = PPO(env, actor_critic, storage, device, **params_dict)
@@ -82,6 +96,10 @@ def load_agent(env, actor_critic, storage, device, params, demo_buffer=None):
 
 
 class ParamLoader:
+    """ParamLoader object - collects all the parameters specified in config.yml into a class that can be
+    conveniently accessed. The attributes of this class comprise of all the default values for all possible
+    parameters"""
+
     def __init__(self, args):
         # set default values
         self.n_envs = 2
@@ -120,7 +138,7 @@ class ParamLoader:
         self.demo_learn_ratio = 0.1  # ratio of demo-learning steps to env steps
         self.demo_sampling_strategy = 'uniform'
         self.seed_sampling = 'random'
-        self.use_replay = False
+        self.use_replay = False  # True for Variant II, False for Variant I
         self.num_demo_seeds = self.n_envs
         self.demo_entropy_coef = 0.01
         self.demo_value_coef = 0.005
@@ -138,6 +156,7 @@ class ParamLoader:
         self.wandb_id = None
 
     def _generate_loader(self, params_dict):
+        """Create the loader object, overwriting defaults when needed"""
         for key, val in params_dict.items():
             setattr(self, key, val)
 

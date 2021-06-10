@@ -1,3 +1,8 @@
+"""
+Rollout module handles storing trajectories for both environment steps and demonstration steps. Also handles computing
+the required estimates
+"""
+
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler, WeightedRandomSampler
 import numpy as np
@@ -5,7 +10,15 @@ from collections import deque
 
 
 class Rollout:
-    """Rollout storage for regular PPO trajectories"""
+    """Rollout storage for regular PPO trajectories
+
+    Attributes:
+        obs_shape: observation shape
+        hidden_state_size: hidden state size
+        num_steps: number of steps per rollout
+        num_envs: number of envs per rollout
+        device: cpu/gpu
+    """
 
     def __init__(self, obs_shape, hidden_state_size, num_steps, num_envs, device):
         self.obs_shape = obs_shape
@@ -16,6 +29,7 @@ class Rollout:
         self.reset()
 
     def reset(self):
+        """Reset the rollout"""
         self.obs_batch = torch.zeros(self.num_steps + 1, self.num_envs, *self.obs_shape)
         self.hidden_states_batch = torch.zeros(self.num_steps + 1, self.num_envs, self.hidden_state_size)
         self.act_batch = torch.zeros(self.num_steps, self.num_envs)
@@ -75,7 +89,7 @@ class Rollout:
             self.adv_batch = (self.adv_batch - torch.mean(self.adv_batch)) / (torch.std(self.adv_batch) + 1e-8)
 
     def fetch_train_generator(self, mini_batch_size=None, recurrent=False):
-        """Create genertors that sample from the rollout buffer"""
+        """Create generators that sample from the rollout buffer"""
         batch_size = self.num_steps * self.num_envs
         if mini_batch_size is None:
             mini_batch_size = batch_size
@@ -138,7 +152,15 @@ class Rollout:
 
 
 class DemoRollout:
-    """Rollout for single demonstration trajectories"""
+    """Rollout for single demonstration trajectories. Used to collect transitions
+
+    Attributes:
+        obs_shape: observation shape
+        hidden_state_size: hidden state size
+        num_steps: maximum length of demo trajectories permitted
+        step: tracks steps of the trajectory
+        device: gpu/cpu
+    """
 
     def __init__(self, obs_shape, hidden_state_size, num_steps, device):
         self.num_steps = num_steps
@@ -149,7 +171,7 @@ class DemoRollout:
         self.reset()
 
     def reset(self):
-        """Reset the storage. Uses lists for storage because trajectory lengths vary"""
+        """Reset the storage"""
         self.obs_store = torch.zeros(self.num_steps, *self.obs_shape)
         self.hidden_states_store = torch.zeros(self.num_steps, self.hidden_state_size)
         self.act_store = torch.zeros(self.num_steps)
@@ -158,7 +180,7 @@ class DemoRollout:
         self.step = 0
 
     def store(self, obs, hidden_state, act, rew, done):
-        """Insert trajectory data in the demo store"""
+        """Insert transition data into the rollout """
         self.obs_store[self.step] = torch.from_numpy(obs.copy())
         self.hidden_states_store[self.step] = torch.from_numpy(hidden_state.copy())
         self.act_store[self.step] = torch.from_numpy(act.copy())
@@ -167,11 +189,23 @@ class DemoRollout:
         self.step += 1
 
     def get_demo_trajectory(self):
+        """Return the trajectories collected"""
         return self.obs_store, self.hidden_states_store, self.act_store, self.rew_store, self.done_store
 
 
 class DemoStorage:
-    """Storage for demonstrations by seed. Used when we keep a limited number of demonstrations per seed"""
+    """Storage for demonstrations by seed. Used when we keep a limited number of demonstrations per seed
+
+    Attributes:
+        obs_shape: observation shape
+        hidden_state_size: hidden state size
+        max_samples: maximum capacity of the demo storage
+        num_steps: maximum length of demo trajectories permitted
+        device: gpu/cpu
+        guide: hashtable with keys being seeds and values being the indices of the corresponding demo trajectories
+        curr_ind: index of the row to insert a trajectory
+        step: tracks steps of the trajectory
+    """
 
     def __init__(self, obs_shape, hidden_state_size, max_samples, num_steps, device):
         self.obs_shape = obs_shape
@@ -185,6 +219,7 @@ class DemoStorage:
         self.reset()
 
     def reset(self):
+        """Reset the demo storage"""
         self.obs_store = torch.zeros(self.max_samples, self.num_steps, *self.obs_shape)
         self.hidden_states_store = torch.zeros(self.max_samples, self.num_steps, self.hidden_state_size)
         self.act_store = torch.zeros(self.max_samples, self.num_steps)
@@ -192,9 +227,10 @@ class DemoStorage:
         self.done_store = torch.zeros(self.max_samples, self.num_steps)
         self.curr_ind = 0
         self.step = 0
+        self.guide = {}
 
     def store(self, obs_trajectory, hidden_state_trajectory, act_trajectory, rew_trajectory, done_trajectory):
-        """Insert trajectory data in the demo store"""
+        """Insert trajectory data in the demo store. Inserts entire trajectories"""
         index = self.curr_ind
         self.obs_store[index, :] = obs_trajectory
         self.hidden_states_store[index, :] = hidden_state_trajectory
@@ -202,19 +238,23 @@ class DemoStorage:
         self.rew_store[index, :] = rew_trajectory
         self.done_store[index, :] = done_trajectory
         self.curr_ind += 1
+        # once we reach full capacity, overwrite the oldest sample
         if self.curr_ind >= self.max_samples:
             self.curr_ind = 0
 
     def update_guide(self, seed):
+        """Document seed/index pair in the guiide"""
         self.guide[seed] = self.curr_ind
 
     def check_guide(self, seed):
+        """Check if a certain seed is present in the guide"""
         if seed not in self.guide:
             return False
         else:
             return True
 
     def get_demo_trajectory(self, seed):
+        """Extract demo trajectories from the storage by seed"""
         index = self.guide[seed]
         obs_trajectory = self.obs_store[index, :]
         hidden_trajectory = self.hidden_states_store[index, :]
@@ -225,7 +265,17 @@ class DemoStorage:
 
 
 class DemoBuffer:
-    """Demonstration replay buffer. Used for both demo_multi = True and demo_multi = False"""
+    """Demonstration replay buffer. Transitions are directly sampled from here
+
+    Attributes:
+        obs_shape: observation shape
+        hidden_state_size: hidden state size
+        max_samples: maximum capacity of the demo storage
+        max_steps: maximum length of demo trajectories permitted
+        device: cpu/gpu
+        curr_ind: index of the row to insert a trajectory
+        buffer_full: flag to indicate if the buffer is full
+    """
 
     def __init__(self, obs_shape, hidden_state_size, max_samples, max_steps, device):
         self.obs_shape = obs_shape
@@ -238,6 +288,7 @@ class DemoBuffer:
         self.reset()
 
     def reset(self):
+        """Reset the demo replay buffer """
         self.obs_store = torch.zeros(self.max_samples, self.max_steps, *self.obs_shape)
         self.hidden_states_store = torch.zeros(self.max_samples, self.max_steps, self.hidden_state_size)
         self.act_store = torch.zeros(self.max_samples, self.max_steps)
@@ -262,16 +313,19 @@ class DemoBuffer:
         self.done_store[index, :] = done_trajectory
         self.mask_store[index, :] = 1 - done_trajectory
         self.sample_mask_store[index, :] = self.generate_sample_mask(done_trajectory)
+        # sample_mask indicates the padding positions
         self.curr_ind += 1
         if self.curr_ind >= self.max_samples:
+            # if the buffer is full, overwrite the oldest sample
             self.curr_ind = 0
             self.buffer_full = True
 
     @staticmethod
     def generate_sample_mask(done_trajectory):
+        """Create a sample mask, which masks all padding data"""
         done_index = torch.nonzero(done_trajectory)[0]
         sample_mask = 1 - done_trajectory
-        sample_mask[done_index] = 1
+        sample_mask[done_index] = 1  # differs from the regular mask in that the terminal transition is not masked
         return sample_mask
 
     def get_n_valid_transitions(self):
@@ -288,21 +342,25 @@ class DemoBuffer:
 
     def compute_pi_v(self, actor_critic):
         """Compute and store action logits and values for all transitions in the buffer using an actor critic -
-        used for HIPPO"""
+        used for HIPPO
+
+            actor_critic: current target policy
+        """
         actor_critic.eval()
         with torch.no_grad():
             num_samples = self.get_n_samples()
             for i in range(num_samples):
+                # iterate through all samples in the buffer and compute action logits and values
                 dist_batch, val_batch, _ = actor_critic(self.obs_store[i].float().to(self.device),
                                                         self.hidden_states_store[i].float().to(self.device),
                                                         self.mask_store[i].float().to(self.device))
                 log_prob_act_batch = dist_batch.log_prob(self.act_store[i].to(self.device))
-                self.value_store[i, :] = val_batch.cpu() * self.sample_mask_store[i, :]
+                self.value_store[i, :] = val_batch.cpu() * self.sample_mask_store[i, :]  # mask the padding values
                 self.log_prob_act_store[i, :] = log_prob_act_batch.cpu()
 
     def compute_estimates(self, actor_critic, gamma=0.99, lmbda=0.95, normalise_adv=False):
         """Compute the advantages of the transitions - used for HIPPO"""
-        self.compute_pi_v(actor_critic)
+        self.compute_pi_v(actor_critic)  # compute action logits and values
         # generalised advantage estimation
         A = 0
         for i in reversed(range(self.max_steps)):

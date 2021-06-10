@@ -1,3 +1,5 @@
+"""Module for the Vanilla PPO agent"""
+
 from agents.base_agent import BaseAgent
 import torch
 import torch.optim as optim
@@ -101,6 +103,7 @@ class PPO(BaseAgent):
 
 
 def get_args(params):
+    """Extract the relevant arguments for Vanilla PPO"""
     param_dict = {'n_steps': params.n_steps,
                   'n_envs': params.n_envs,
                   'epoch': params.epoch,

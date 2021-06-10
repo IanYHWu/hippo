@@ -1,3 +1,5 @@
+"""Module for the HIPPO agent"""
+
 from agents.ppo import PPO
 import torch
 import torch.optim as optim
@@ -130,6 +132,7 @@ class HIPPO(PPO):
 
 
 def get_args_hippo(params):
+    """Extract arguments relevant to HIPPO"""
     param_dict = {'n_steps': params.n_steps,
                   'n_envs': params.n_envs,
                   'epoch': params.epoch,

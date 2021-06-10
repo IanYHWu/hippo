@@ -1,7 +1,6 @@
 import torch
 import numpy as np
 import time
-import random
 
 from common.loaders import ParamLoader
 from common.data_logging import load_args
@@ -22,13 +21,28 @@ from agents.demonstrator import Oracle
 def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params, evaluator=None,
           controller=None, demo_rollout=None, demo_buffer=None, demo_storage=None, demonstrator=None):
     """
-    Main training loop
+    Train the RL agent, representing the main training loop
+        agent: RL agent
+        actor_critic: policy network to train
+        env: environment object
+        rollout: environment-learning rollout
+        logger: object to perform data logging
+        curr_timestep: initial timestep - used for checkpointing
+        num_timesteps: total number of timesteps to train
+        params: ParamLoader object, to load parameters from config.yml
+        evaluator: object to perform evaluation steps
+        controller: object that decides when to query and learn from demos
+        demo_rollout: demonstration-learning rollout. Collects transitions of a single trajectory
+        demo_buffer: replay buffer for demonstration trajectories
+        demo_storage: storage unit for demonstrations, matching seeds to single demo trajectories
+        demonstrator: demonstrator agent
     """
     if params.algo == 'hippo':
         demo = True
         demo_lr_scheduler = DemoLRScheduler(args, params)
         if params.use_replay:
             replay = True
+            # replay flag: True corresponds to Variant II, False corresponds to Variant I
             print("Using Replay")
         else:
             replay = False
@@ -36,14 +50,18 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
         # if hot start, load hot start trajectories into the buffer
         if params.hot_start:
             print("Hot Start - {} Demonstrations".format(params.hot_start))
+            # list of seeds to generate hot-start trajectories for
             demo_level_seeds = controller.get_seeds(hot_start_mode=True)
             for seed in demo_level_seeds:
-                if params.use_demo_store:
+                if params.use_demo_store:  # demo storage mode - store a single trajectory per seed
                     if demo_storage.check_guide(seed):
+                        # if the seed is already in the demo storage, get the stored trajectory
                         demo_obs_t, demo_hidden_state_t, demo_act_t, demo_rew_t, demo_done_t = demo_storage.get_demo_trajectory(
                             seed)
+                        # store the trajectory in the demo replay buffer
                         demo_buffer.store(demo_obs_t, demo_hidden_state_t, demo_act_t, demo_rew_t, demo_done_t)
                     else:
+                        # if the seed is not in the demo storage, get a demo trajectory and store it
                         tries = 0  # keeps track of how many times this level has been tried
                         valid = False
                         while not valid:
@@ -52,6 +70,8 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                             demo_obs = demo_env.reset()
                             demo_hidden_state = np.zeros((1, rollout.hidden_state_size))
                             demo_done = np.zeros(1)
+                            # collect a trajectory of at most demo_max_steps steps
+                            # ensures we only collect good trajectories
                             while demo_done[0] == 0 and step_count < params.demo_max_steps:
                                 demo_act, demo_next_hidden_state = demonstrator.predict(demo_obs, demo_hidden_state,
                                                                                         demo_done)
@@ -69,7 +89,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                                                   demo_done_t)
                                 demo_storage.store(demo_obs_t, demo_hidden_state_t, demo_act_t, demo_rew_t,
                                                    demo_done_t)
-                                demo_rollout.reset()
+                                demo_rollout.reset()  # after storing the trajectory, reset the rollout
                                 demo_env.close()
                                 valid = True
                             else:
@@ -81,6 +101,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                                     # if this level has yielded 10 bad trajectories, skip it
                                     break
                 else:
+                    # if we don't use the demo storage, place
                     tries = 0  # keeps track of how many times this level has been tried
                     valid = False
                     while not valid:
@@ -147,6 +168,8 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
 
         # learning from single demo trajectories - loop to gather trajectories
         if demo:
+            # learn_from_demos: flag for when to do a demo-learning step
+            # sample_demo: flag for when to sample a new demo trajectory
             learn_from_demos = False
             if replay and controller.query_demonstrator(curr_timestep):
                 sample_demo = True
@@ -157,7 +180,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                 sample_demo = False
 
             if sample_demo:
-                # query the oracle for a single demonstration
+                # query the demonstrator for a single demonstration
                 demo_level_seeds = controller.get_seeds()
                 for seed in demo_level_seeds:
                     if params.use_demo_store:
@@ -241,8 +264,10 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                 learn_from_demos = True
 
             if learn_from_demos:
+                # perform a demo-learning step
                 summary = agent.demo_optimize(demo_lr_scheduler)
                 if not replay:
+                    # if we do not use replay (Variant I), reset the replay buffer after a learning step
                     demo_buffer.reset()
 
             if args.log_demo_stats:
@@ -275,9 +300,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
 
 
 def main(args):
-    """
-    Main function to execute
-    """
+
     added_timesteps = args.add_timesteps  # used if extra epochs need to be trained
     load_checkpoint = args.load_checkpoint
 
