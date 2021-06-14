@@ -140,6 +140,7 @@ class ParamLoader:
         self.seed_sampling = 'random'
         self.use_replay = False  # True for Variant II, False for Variant I
         self.num_demo_seeds = self.n_envs
+        self.demo_limit = None
         self.demo_entropy_coef = 0.01
         self.demo_value_coef = 0.005
         self.demo_max_steps = 999  # max acceptable length of demo trajectories

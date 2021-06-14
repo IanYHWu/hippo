@@ -41,6 +41,7 @@ class DemoScheduler:
         self.num_demo_seeds = params.num_demo_seeds
         self.replay = params.use_replay
         self.num_levels = args.num_levels
+        self.demo_limit = params.demo_limit
 
         self.query_count = 0
         self.demo_learn_count = 0
@@ -60,6 +61,10 @@ class DemoScheduler:
         """Learn from the replay buffer"""
         if always_learn:
             return True
+        if self.demo_limit:
+            if curr_timestep > self.demo_limit:
+                print("limit")
+                return False
         learn_every = (1 / self.demo_learn_ratio) * self.n_envs * self.n_steps
         if self.replay and self.buffer_empty:
             return False

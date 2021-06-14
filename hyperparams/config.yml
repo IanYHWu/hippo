@@ -115,8 +115,11 @@ tiny_hippo:
     demo_value_coef: 0.005
     demo_max_steps: 256
     num_demo_seeds: 2
-    buffer_max_samples: 2
-    use_demo_store: False
+    hot_start: 5
+    hot_start_seed_sampling: fixed
+    demo_limit: 2500
+    buffer_max_samples: 5
+    use_demo_store: True
     demo_store_max_samples: 200
     use_replay: False
     seed_sampling: latest
