@@ -1,6 +1,7 @@
 """Module for the base agent class"""
 
-class BaseAgent(object):
+
+class BaseAgent:
     """
     Class for the basic agent objects.
     """
