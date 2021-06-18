@@ -99,7 +99,7 @@ tiny_hippo_bandit:
     eps_clip: 0.2
     value_coef: 0.5
     entropy_coef: 0.01
-    normalise_adv: True
+    normalise_adv: False
     normalise_reward: True
     use_gae: True
     algo: hippo
@@ -126,6 +126,6 @@ tiny_hippo_bandit:
     demo_normalise_adv: False
     demo_lr_schedule: False
     temperature: 2
-    rho: 0.5
+    rho: 0.1
 
 
