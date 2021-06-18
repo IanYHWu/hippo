@@ -221,7 +221,7 @@ class Logger:
         results = [self.curr_timestep] + col_results
         if self._check_demo_log_exists():
             df = pd.read_csv(self.demo_log_path, index_col=0)
-            df = df[df.timestep != self.curr_timestep]
+            df = df[df.timestep != self.curr_timestep]  # overwrite existing timesteps
             df.loc[len(df)] = np.array(results)
             df.to_csv(self.demo_log_path)
         else:
@@ -234,7 +234,7 @@ class Logger:
             wandb.log(wandb_dict)
 
     def _initialise_wandb(self):
-        """Initialise Wandb"""
+        """Initialise wandb"""
         if self.args.load_checkpoint:
             wandb_id = self.params.wandb_id
             wandb.init(project=self.args.wandb_project_name, name=self.args.wandb_name, resume="must", id=wandb_id)
