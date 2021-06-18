@@ -202,7 +202,7 @@ class DemoStorage:
         max_samples: maximum capacity of the demo storage
         num_steps: maximum length of demo trajectories permitted
         device: gpu/cpu
-        guide: hashtable with keys being seeds and values being the indices of the corresponding demo trajectories
+        seed_to_ind: hashtable with keys being seeds and values being the indices of the corresponding demo trajectories
         curr_ind: index of the row to insert a trajectory
         step: tracks steps of the trajectory
     """
@@ -213,9 +213,11 @@ class DemoStorage:
         self.num_steps = num_steps
         self.max_samples = max_samples
         self.device = device
-        self.guide = {}
+        self.seed_to_ind = {}
+        self.ind_to_seed = {}
         self.curr_ind = 0
         self.step = 0
+        self.storage_full = False
         self.reset()
 
     def reset(self):
@@ -227,40 +229,65 @@ class DemoStorage:
         self.done_store = torch.zeros(self.max_samples, self.num_steps)
         self.curr_ind = 0
         self.step = 0
-        self.guide = {}
+        self.storage_full = False
+        self.seed_to_ind = {}  # guide - maps seed to indices
+        self.ind_to_seed = {}  # guide - maps index to seed
 
-    def store(self, obs_trajectory, hidden_state_trajectory, act_trajectory, rew_trajectory, done_trajectory):
+    def store(self, obs_trajectory, hidden_state_trajectory, act_trajectory, rew_trajectory, done_trajectory, store_index=None):
         """Insert trajectory data in the demo store. Inserts entire trajectories"""
-        index = self.curr_ind
+        if store_index is not None:
+            index = store_index
+        else:
+            index = self.curr_ind
         self.obs_store[index, :] = obs_trajectory
         self.hidden_states_store[index, :] = hidden_state_trajectory
         self.act_store[index, :] = act_trajectory
         self.rew_store[index, :] = rew_trajectory
         self.done_store[index, :] = done_trajectory
-        self.curr_ind += 1
+        if store_index is None:
+            self.curr_ind += 1
         # once we reach full capacity, overwrite the oldest sample
         if self.curr_ind >= self.max_samples:
+            self.storage_full = True
             self.curr_ind = 0
 
-    def update_guide(self, seed):
-        """Document seed/index pair in the guiide"""
-        self.guide[seed] = self.curr_ind
+    def update_guides(self, seed, store_index=None):
+        """Document seed/index pair in the guides"""
+        if store_index is not None:
+            index = store_index
+        else:
+            index = self.curr_ind
+        if index in self.ind_to_seed:
+            old_seed = self.ind_to_seed[index]
+            self.seed_to_ind[old_seed].remove(index)
+        self.ind_to_seed[index] = seed
+        if seed in self.seed_to_ind:
+            self.seed_to_ind[seed].append(index)
+        else:
+            self.seed_to_ind[seed] = [index]
 
     def check_guide(self, seed):
-        """Check if a certain seed is present in the guide"""
-        if seed not in self.guide:
+        """Check if a certain seed is present in the seed_to_ind"""
+        if seed not in self.seed_to_ind:
             return False
         else:
             return True
 
-    def get_demo_trajectory(self, seed):
-        """Extract demo trajectories from the storage by seed"""
-        index = self.guide[seed]
+    def get_n_samples(self):
+        if self.storage_full:
+            return self.max_samples
+        else:
+            return self.curr_ind
+
+    def get_demo_trajectory(self, store_index=None):
+        """Extract demo trajectories from the storage by seed or by index"""
+        index = store_index
         obs_trajectory = self.obs_store[index, :]
         hidden_trajectory = self.hidden_states_store[index, :]
         act_trajectory = self.act_store[index, :]
         rew_trajectory = self.rew_store[index, :]
         done_trajectory = self.done_store[index, :]
+
         return obs_trajectory, hidden_trajectory, act_trajectory, rew_trajectory, done_trajectory
 
 
@@ -382,6 +409,19 @@ class DemoBuffer:
             sq_mean = adv_mean ** 2
             adv_std = torch.sqrt(mean_sq - sq_mean + 1e-8)  # variance is mean of the square - square of the mean
             self.adv_store = (self.adv_store - adv_mean) / adv_std
+
+    def compute_value_losses(self):
+        """Compute the average L1-value loss for all samples in the buffer"""
+        n = self.get_n_samples()
+        value_losses = torch.zeros(n)
+        for i in range(n):
+            adv_sample = torch.abs(self.adv_store[i])
+            mask_sample = self.sample_mask_store[i]
+            sum_adv = torch.sum(adv_sample * mask_sample)
+            sample_len = torch.nonzero(1 - mask_sample)[0].item()
+            value_losses[i] = sum_adv / sample_len
+
+        return value_losses
 
     def demo_generator(self, batch_size, mini_batch_size, recurrent=False):
         """Create generator to sample transitions from the replay buffer - used for both HIPPO and IL"""
