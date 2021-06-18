@@ -101,7 +101,8 @@ class ParamLoader:
     parameters"""
 
     def __init__(self, args):
-        # set default values
+        """Set default values"""
+        # basic ppo parameters
         self.n_envs = 2
         self.n_steps = 16
         self.n_checkpoints = 2
@@ -122,33 +123,35 @@ class ParamLoader:
         self.architecture = 'ResNet'
         self.recurrent = False
         self.hidden_size = 256
+        # basic hippo parameters
         self.demo_coef = 0.5
         self.demo_learning_rate = 0.0005
         self.demo_batch_size = 64
         self.demo_mini_batch_size = 32
         self.demo_epochs = 10
-        self.buffer_max_samples = 100  # max capacity of demo buffer
-        self.num_demo_queries = 10  # max no. of demo queries permitted
-        self.hot_start = 0  # pre-loaded demonstrations
-        self.hot_start_seed_sampling = 'random'
         self.demo_controller = 'linear_schedule'  # controller type
-        self.rho = 1.1  # for GAEController - multiplier to consider demonstration
-        self.weighting_coef = 0.3  # for GAEController - weighting coefficient for running averages
-        self.num_demo_per_query = 1  # no. of trajectories per demo query. Used for schedule-type controllers
-        self.demo_learn_ratio = 0.1  # ratio of demo-learning steps to env steps
         self.demo_sampling_strategy = 'uniform'
-        self.seed_sampling = 'random'
-        self.use_replay = False  # True for Variant II, False for Variant I
-        self.num_demo_seeds = self.n_envs
-        self.demo_limit = None
         self.demo_entropy_coef = 0.01
         self.demo_value_coef = 0.005
         self.demo_max_steps = 999  # max acceptable length of demo trajectories
-        self.use_replay = False  # treat the DemoBuffer as a replay buffer
-        self.use_demo_store = False  # store demos and re-use by seed
-        self.demo_store_max_samples = 200
         self.demo_normalise_adv = False  # normalise demo advantages
         self.demo_lr_schedule = False  # learning rate scheduler for demo learning steps
+        self.buffer_max_samples = 100  # max capacity of demo buffer
+        # schedule controller
+        self.pre_load = 0  # pre-loaded demonstrations
+        self.pre_load_seed_sampling = 'random'  # determines how we sample seeds for hot start trajectories
+        self.demo_learn_ratio = 0.1  # ratio of demo-learning steps to env steps
+        self.demo_levels = 200  # number of seeds we permit demonstrations of
+        self.demo_sampling = 'random'
+        self.num_learn_demos = 64  # number of demo trajectories sampled per demo learning step
+        self.demo_limit = None  # no. of timesteps beyond which no demo learning is permitted
+        self.store_mode = True  # store demos and re-use
+        self.demo_store_max_samples = 200  # maximum sample capacity of demo storage. Used with store_mode
+        self.replace = 0  # no. of demos in the storage to replace per demo learn step. Used with store_mode
+        # Bandit controller
+        self.scoring_method = 'rank'
+        self.temperature = 0.5
+        self.rho = 0.5  # demo score scaling - downweights the demo feedback
 
         # read in yaml config file and overwrite the appropriate defaults
         with open('hyperparams/config.yml', 'r') as f:
