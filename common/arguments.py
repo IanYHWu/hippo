@@ -70,7 +70,7 @@ parser.add_argument(
 
 # ppo_demo args
 parser.add_argument(
-    '--oracle_path', type=str, default='', help='Path to synthetic oracle'
+    '--demonstrator_path', type=str, default='', help='Path to synthetic demonstrator'
 )
 parser.add_argument(
     '--log_demo_stats', action='store_true', help='Log demonstration statistics'
