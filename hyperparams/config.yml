@@ -42,48 +42,7 @@ tiny:
     recurrent: False
     hidden_size: 256
 
-tiny_hippo_replay:
-    n_envs: 2
-    n_steps: 16
-    n_checkpoints: 2
-    epoch: 3
-    mini_batch_per_epoch: 8
-    mini_batch_size: 2048
-    gamma: 0.999
-    lmbda: 0.95
-    learning_rate: 0.0005
-    grad_clip_norm: 0.5
-    eps_clip: 0.2
-    value_coef: 0.5
-    entropy_coef: 0.01
-    normalise_adv: True
-    normalise_reward: True
-    use_gae: True
-    algo: hippo
-    architecture: ResNet
-    recurrent: False
-    hidden_size: 256
-    demo_coef: 0.5
-    demo_learning_rate: 0.0005
-    demo_batch_size: 32
-    demo_mini_batch_size: 16
-    demo_epochs: 3
-    hot_start: 4
-    hot_start_seed_sampling: fixed
-    buffer_max_samples: 10
-    num_demo_queries: 10
-    demo_controller: linear_schedule
-    num_demo_seeds: 3
-    demo_learn_ratio: 0.1
-    use_demo_store: False
-    use_replay: True
-    demo_entropy_coef: 0.01
-    demo_value_coef: 0.005
-    demo_max_steps: 256
-    demo_normalise_adv: False
-    demo_lr_schedule: False
-
-tiny_hippo:
+tiny_hippo_schedule:
     n_envs: 2
     n_steps: 16
     n_checkpoints: 2
@@ -113,20 +72,20 @@ tiny_hippo:
     demo_learn_ratio: 0.5
     demo_entropy_coef: 0.01
     demo_value_coef: 0.005
-    demo_max_steps: 256
-    num_demo_seeds: 2
-    hot_start: 5
-    hot_start_seed_sampling: fixed
-    demo_limit: 2500
+    demo_max_steps: 500
+    num_learn_demos: 5
+    pre_load: 5
+    pre_load_seed_sampling: fixed
+    demo_levels: 5
     buffer_max_samples: 5
-    use_demo_store: True
-    demo_store_max_samples: 200
-    use_replay: False
-    seed_sampling: latest
+    store_mode: True
+    demo_store_max_samples: 5
+    replace: 2
+    demo_sampling: random
     demo_normalise_adv: False
     demo_lr_schedule: False
 
-tiny_hippo_gae:
+tiny_hippo_bandit:
     n_envs: 2
     n_steps: 16
     n_checkpoints: 2
@@ -149,180 +108,24 @@ tiny_hippo_gae:
     hidden_size: 256
     demo_coef: 0.5
     demo_learning_rate: 0.0005
-    demo_batch_size: 128
-    demo_mini_batch_size: 64
+    demo_batch_size: 64
+    demo_mini_batch_size: 32
     demo_epochs: 10
-    hot_start: 4
-    buffer_max_samples: 10
-    num_demo_queries: 10
-    demo_controller: gae
-    rho: 1.05
-    weighting_coef: 0.4
-    demo_learn_ratio: 0.1
-    demo_sampling_strategy: uniform
+    demo_controller: bandit
+    demo_learn_ratio: 0.5
     demo_entropy_coef: 0.01
     demo_value_coef: 0.005
-    demo_max_steps: 999
-    demo_multi: False
+    demo_max_steps: 256
+    num_learn_demos: 5
+    pre_load: 10
+    pre_load_seed_sampling: fixed
+    demo_levels: 5
+    buffer_max_samples: 5
+    store_mode: True
+    demo_store_max_samples: 10
     demo_normalise_adv: False
     demo_lr_schedule: False
+    temperature: 2
+    rho: 0.5
 
-hippo_1:
-    n_envs: 64
-    n_steps: 256
-    n_checkpoints: 10
-    epoch: 3
-    mini_batch_per_epoch: 8
-    mini_batch_size: 2048
-    gamma: 0.999
-    lmbda: 0.95
-    learning_rate: 0.0005
-    grad_clip_norm: 0.5
-    eps_clip: 0.2
-    value_coef: 0.5
-    entropy_coef: 0.01
-    normalise_adv: True
-    normalise_reward: True
-    use_gae: True
-    algo: ppo
-    architecture: ResNet
-    recurrent: False
-    hidden_size: 256
-    demo_coef: 0.5
-    demo_learning_rate: 0.0005
-    demo_batch_size: 512
-    demo_mini_batch_size: 64
-    demo_epochs: 3
-    demo_controller: linear_schedule
-    demo_learn_ratio: 0.1
-    demo_entropy_coef: 0.01
-    demo_value_coef: 0.005
-    demo_max_steps: 999
-    num_demo_seeds: 64
-    buffer_max_samples: 64
-    use_demo_store: False
-    demo_store_max_samples: 200
-    use_replay: False
-    seed_sampling: latest
-    demo_normalise_adv: False
-    demo_lr_schedule: False
 
-hippo_2:
-    n_envs: 64
-    n_steps: 256
-    n_checkpoints: 10
-    epoch: 3
-    mini_batch_per_epoch: 8
-    mini_batch_size: 2048
-    gamma: 0.999
-    lmbda: 0.95
-    learning_rate: 0.0005
-    grad_clip_norm: 0.5
-    eps_clip: 0.2
-    value_coef: 0.5
-    entropy_coef: 0.01
-    normalise_adv: True
-    normalise_reward: True
-    use_gae: True
-    algo: ppo
-    architecture: ResNet
-    recurrent: False
-    hidden_size: 256
-    demo_coef: 0.5
-    demo_learning_rate: 0.0005
-    demo_batch_size: 512
-    demo_mini_batch_size: 64
-    demo_epochs: 3
-    demo_controller: linear_schedule
-    demo_learn_ratio: 0.1
-    demo_entropy_coef: 0.01
-    demo_value_coef: 0.005
-    demo_max_steps: 999
-    num_demo_seeds: 64
-    buffer_max_samples: 64
-    use_demo_store: False
-    demo_store_max_samples: 200
-    use_replay: False
-    seed_sampling: random
-    demo_normalise_adv: False
-    demo_lr_schedule: False
-
-hippo_3:
-    n_envs: 64
-    n_steps: 256
-    n_checkpoints: 10
-    epoch: 3
-    mini_batch_per_epoch: 8
-    mini_batch_size: 2048
-    gamma: 0.999
-    lmbda: 0.95
-    learning_rate: 0.0005
-    grad_clip_norm: 0.5
-    eps_clip: 0.2
-    value_coef: 0.5
-    entropy_coef: 0.01
-    normalise_adv: True
-    normalise_reward: True
-    use_gae: True
-    algo: ppo
-    architecture: ResNet
-    recurrent: False
-    hidden_size: 256
-    demo_coef: 0.5
-    demo_learning_rate: 0.0005
-    demo_batch_size: 512
-    demo_mini_batch_size: 64
-    demo_epochs: 3
-    demo_controller: linear_schedule
-    demo_learn_ratio: 0.1
-    demo_entropy_coef: 0.01
-    demo_value_coef: 0.005
-    demo_max_steps: 999
-    num_demo_seeds: 64
-    buffer_max_samples: 64
-    use_demo_store: True
-    demo_store_max_samples: 200
-    use_replay: False
-    seed_sampling: random
-    demo_normalise_adv: False
-    demo_lr_schedule: False
-
-hippo_4:
-    n_envs: 64
-    n_steps: 256
-    n_checkpoints: 10
-    epoch: 3
-    mini_batch_per_epoch: 8
-    mini_batch_size: 2048
-    gamma: 0.999
-    lmbda: 0.95
-    learning_rate: 0.0005
-    grad_clip_norm: 0.5
-    eps_clip: 0.2
-    value_coef: 0.5
-    entropy_coef: 0.01
-    normalise_adv: True
-    normalise_reward: True
-    use_gae: True
-    algo: ppo
-    architecture: ResNet
-    recurrent: False
-    hidden_size: 256
-    demo_coef: 0.5
-    demo_learning_rate: 0.0005
-    demo_batch_size: 512
-    demo_mini_batch_size: 64
-    demo_epochs: 3
-    demo_controller: linear_schedule
-    demo_learn_ratio: 0.1
-    demo_entropy_coef: 0.01
-    demo_value_coef: 0.005
-    demo_max_steps: 999
-    num_demo_seeds: 64
-    buffer_max_samples: 64
-    use_demo_store: True
-    demo_store_max_samples: 200
-    use_replay: False
-    seed_sampling: latest
-    demo_normalise_adv: False
-    demo_lr_schedule: False
