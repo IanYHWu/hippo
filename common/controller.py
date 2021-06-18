@@ -176,6 +176,30 @@ class DemoScheduler(BaseController):
 
 
 class BanditController(BaseController):
+    """Bandit controller - uses a bandit to decide when to do an env learning and when to do a demo learning step.
+    Also decides which demos to sample given a demo learning step is selected
+
+    Attributes:
+        controller_type: specifies what type of controller this is
+        bandit: bandit object to use
+        rollout: env rollout
+        max_samples: max storage samples allowed
+        value_losses: list of values losses associated with each index of the storage
+        last_demo_indices: indices of last demos learned from
+        demo_storage: demo_storage object
+        demo_buffer: demo_buffer object
+        actor_critic: policy to learn
+        learn_from: which arm was last used (0/1)
+        scoring_method: method used to assign weights to individual demos
+        temperature: temperature coefficient to control weighting of scores
+        num_learn_demos: number of samples learned from per demo learning step
+        rho: coefficient controlling weight of demo feedback relative to env feedback
+        num_store_demos: current number of demos in demo_store
+        env_val_loss_window: sliding window of env value losses
+        demo_val_loss_window: sliding window of demo value losses
+        env_learn_count: number of env learning steps performed
+        demo_learn_count: number of demo learning steps performed
+    """
 
     def __init__(self, args, params, rollout, demo_storage, demo_buffer, actor_critic):
         super().__init__(args, params)
@@ -186,7 +210,6 @@ class BanditController(BaseController):
         self.max_samples = params.demo_store_max_samples
         self.value_losses = np.zeros(self.max_samples)
         self.last_demo_indices = None
-        self.guide = {}
         self.demo_storage = demo_storage
         self.demo_buffer = demo_buffer
         self.actor_critic = actor_critic
@@ -203,6 +226,7 @@ class BanditController(BaseController):
         self.demo_learn_count = 0
 
     def initialise(self):
+        """Initialise the value loss scores of individual demos"""
         self.num_store_demos = self.demo_storage.get_n_samples()
         i = 0
         while i < self.num_store_demos:
@@ -221,6 +245,7 @@ class BanditController(BaseController):
             self.demo_buffer.reset()
 
     def learn_from_env(self):
+        """Learn from the environment"""
         self._sample_bandit()
         if self.learn_from == 0:
             self.env_learn_count += 1
@@ -229,6 +254,7 @@ class BanditController(BaseController):
             return False
 
     def learn_from_demos(self, curr_timestep):
+        """Learn from demonstrations"""
         if self.learn_from == 1:
             self.demo_learn_count += 1
             return True
@@ -236,10 +262,12 @@ class BanditController(BaseController):
             return False
 
     def _sample_bandit(self):
+        """Sample the bandit"""
         learn_from = self.bandit.sample()
         self.learn_from = learn_from
 
     def _update_bandit(self):
+        """Update the bandit with feedback - helper method"""
         if self.learn_from == 0:
             feedback = torch.mean(torch.abs(self.rollout.adv_batch)).item()
             self.env_val_loss_window.append(feedback)
@@ -249,17 +277,20 @@ class BanditController(BaseController):
         self.bandit.update(feedback)
 
     def _update_value_losses(self):
+        """Update the value loss scores"""
         latest_value_losses = self.demo_buffer.compute_value_losses().numpy()
         for index, i in enumerate(self.last_demo_indices):
             self.value_losses[i] = latest_value_losses[index]
 
     def update(self):
+        """Update the bandit"""
         self._update_bandit()
         if self.learn_from == 1:
             self._update_value_losses()
 
     def get_learn_indices(self):
-        if self.scoring_method == 'rank':
+        """Decide which demos to learn from"""
+        if self.scoring_method == 'rank':  # rank prioritisation
             ranking = np.argsort(self.value_losses * -1)
             scores = (1 / (np.arange(0, len(ranking)) + 1)) ** self.temperature
             scores /= np.sum(scores)
@@ -271,9 +302,11 @@ class BanditController(BaseController):
             raise NotImplementedError
 
     def get_new_seeds(self, replace_mode=True):
+        """Sample a list of seeds - used for gathering trajectories"""
         return [], []
 
     def get_stats(self):
+        """Get the demo stats"""
         choice_ratio_list = self.bandit.choice_ratio_list
         demo_ratio = np.sum(choice_ratio_list) / len(choice_ratio_list)
         stats = {"env learning steps": self.env_learn_count, "demo learning steps": self.demo_learn_count,
@@ -286,6 +319,17 @@ class BanditController(BaseController):
 
 
 class EXP3:
+    """Implementation of the Exp3 Adverserial bandit
+
+    Attributes:
+        arms: tuple of indices associated with each distinct action
+        gamma: weighting parameter - gamma = 1 implies uniform random
+        demean_window: window for mean tracking
+        norm_window: window for normalisation
+        rand_init: random initialisation steps
+        store_choices: store the choices made
+        track_choice_ratios: track the choice ratios - tracks based on recency
+    """
 
     def __init__(self,
                  arms=(0, 1),  # default - two arms
@@ -315,10 +359,12 @@ class EXP3:
             self.choice_ratio_list = deque(maxlen=30)
 
     def sample(self):
+        """Sample from the bandit"""
         self.probs = [(1 - self.gamma) * x / (sum(self.w.values()) + 1e-6) + self.gamma / len(self.arms) for x in
-                      self.w.values()]
+                      self.w.values()]  # self.w are the bandit weights
         self.probs /= np.sum(self.probs)  # normalisation, in case they don't sum to one
         if len(self.feedback) < self.rand_init:
+            # cycle between arms during random initialisation phase
             if self.arm == 0:
                 self.arm = 1
             else:
@@ -334,6 +380,7 @@ class EXP3:
         return self.arm
 
     def update(self, feedback):
+        """Update the bandit using feedback"""
         # need to normalize score
         # since this is non-stationary, subtract the mean of the previous window
         self.raw_scores.append(feedback)
@@ -347,7 +394,7 @@ class EXP3:
                 x = normalised / self.probs[idx]
             else:
                 x = 0
-            self.w[arm] *= np.exp((self.gamma * x) / len(self.arms))
+            self.w[arm] *= np.exp((self.gamma * x) / len(self.arms))  # weight update
         sum_w = sum(self.w.values())
         for i, _ in self.w.items():
             self.w[i] = self.w[i] / sum_w
