@@ -214,24 +214,24 @@ class Logger:
 
         return episode_statistics
 
-    def log_demo_stats(self, num_queries, num_learn, score):
+    def log_demo_stats(self, stats_dict):
         """Log the demonstration statistics - used with certain controllers"""
-        results = [self.curr_timestep] + [num_queries] + [num_learn] + [score]
+        col_headers = ['timestep'] + [key for key in stats_dict.keys()]
+        col_results = [val for val in stats_dict.values()]
+        results = [self.curr_timestep] + col_results
         if self._check_demo_log_exists():
             df = pd.read_csv(self.demo_log_path, index_col=0)
-            df = df[df.timesteps != self.curr_timestep]
+            df = df[df.timestep != self.curr_timestep]
             df.loc[len(df)] = np.array(results)
             df.to_csv(self.demo_log_path)
         else:
             df = pd.DataFrame(np.array([results]),
-                              columns=['timesteps', 'num_queries', 'num_learn', 'score'])
+                              columns=col_headers)
             df.to_csv(self.demo_log_path)
 
         if self.log_wandb:
-            wandb.log({'timesteps': self.curr_timestep,
-                       'num_queries': num_queries,
-                       'num_learn': num_learn,
-                       'score': score})
+            wandb_dict = {**{'timesteps': self.curr_timestep}, **stats_dict}
+            wandb.log(wandb_dict)
 
     def _initialise_wandb(self):
         """Initialise Wandb"""
