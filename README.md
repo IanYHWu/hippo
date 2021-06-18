@@ -8,6 +8,9 @@ The algorithm learns to decide when to learn from a demonstration, and what the 
 increase the efficiency of RL while enabling better generalisation.
 
 ![Caveflyer](images/caveflyer.png)
+
+![Setup](images/setup.png)
+
  
 
 We use the OpenAI Procgen Benchmark. Results are shown below.
