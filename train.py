@@ -129,6 +129,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
         if demo:
             if args.log_demo_stats:
                 stats_dict = controller.get_stats()
+                print(stats_dict)
                 logger.log_demo_stats(stats_dict)
             controller.update()
             demo_buffer.reset()

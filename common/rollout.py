@@ -213,8 +213,8 @@ class DemoStorage:
         self.num_steps = num_steps
         self.max_samples = max_samples
         self.device = device
-        self.seed_to_ind = {}
-        self.ind_to_seed = {}
+        self.seed_to_ind = {}  # maps a seed to the indices containing corresponding demos (one-to-many)
+        self.ind_to_seed = {}  # maps storage index to seed (many-to-one)
         self.curr_ind = 0
         self.step = 0
         self.storage_full = False
@@ -254,10 +254,13 @@ class DemoStorage:
     def update_guides(self, seed, store_index=None):
         """Document seed/index pair in the guides"""
         if store_index is not None:
+            # if store_index is used, store in a particular index
             index = store_index
         else:
+            # else store in the next empty slot
             index = self.curr_ind
         if index in self.ind_to_seed:
+            # for seed-to-ind we need to disconnect index from old seed
             old_seed = self.ind_to_seed[index]
             self.seed_to_ind[old_seed].remove(index)
         self.ind_to_seed[index] = seed
@@ -274,6 +277,7 @@ class DemoStorage:
             return True
 
     def get_n_samples(self):
+        """Get the number of samples in the demo_storage"""
         if self.storage_full:
             return self.max_samples
         else:
@@ -447,40 +451,3 @@ class DemoBuffer:
         else:
             raise NotImplementedError
 
-    """
-    def update_priorities(self, updates):
-        updates = self._list_to_tensor(updates).reshape(-1)
-        indices = [i for sublist in self.last_updated_indices for i in sublist]
-        rows, cols = self.priorities.shape[0], self.priorities.shape[1]
-        self.priorities = self.priorities.reshape(-1)
-        self.priorities[indices] = updates ** self.alpha
-        self.priorities += self.eps  # ensure that all samples have a non-zero chance of being sampled
-        self.priorities *= self.mask_store.reshape(-1)
-        self._normalise_priorities()
-        self.priorities = self.priorities.reshape(rows, cols).unsqueeze(-1)
-
-    def compute_priorities_hippo(self):
-        if self.sampling_strategy == 'prioritised':
-            self.priorities = torch.abs(self.returns_store.squeeze(-1) - self.value_store)
-        elif self.sampling_strategy == 'prioritised_clamp':
-            self.priorities = torch.clamp(self.returns_store - self.value_store, min=0)
-        else:
-            raise NotImplementedError
-        self.priorities = self.priorities ** self.alpha
-        self.priorities += self.eps
-        self.priorities *= self.mask_store.squeeze(-1)
-        self._normalise_priorities()
-
-    def get_per_weights(self):
-        n = self.get_n_valid_transitions()
-        per_weights = ((1 / n) * (1 / self.priorities)) ** self.beta
-        max_weight = torch.max(per_weights)
-        per_weights = per_weights / max_weight
-
-        return per_weights
-
-    def _normalise_priorities(self):
-        summed = torch.sum(self.priorities)
-        self.priorities = self.priorities / summed
-        self.max_priority = torch.max(self.priorities)
-    """
