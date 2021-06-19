@@ -85,7 +85,7 @@ class DemoScheduler(BaseController):
     def __init__(self, args, params, rollout, schedule='linear', demo_storage=None):
         super().__init__(args, params)
 
-        self.controller_type = "schedule"
+        self.controller_type = "simple_schedule"
         self.num_timesteps = args.num_timesteps
         self.demo_schedule = schedule
         self.demo_learn_ratio = params.demo_learn_ratio
@@ -103,7 +103,6 @@ class DemoScheduler(BaseController):
 
     def learn_from_demos(self, curr_timestep):
         """Learn from the replay buffer"""
-
         if self.demo_limit:
             if curr_timestep > self.demo_limit:
                 return False
@@ -208,7 +207,7 @@ class BanditController(BaseController):
         self.bandit = EXP3()
         self.rollout = rollout  # env rollout
         self.max_samples = params.demo_store_max_samples
-        self.value_losses = np.zeros(self.max_samples)
+        self.value_losses = None
         self.last_demo_indices = None
         self.demo_storage = demo_storage
         self.demo_buffer = demo_buffer
@@ -228,11 +227,16 @@ class BanditController(BaseController):
     def initialise(self):
         """Initialise the value loss scores of individual demos"""
         self.num_store_demos = self.demo_storage.get_n_samples()
+        print("Number of valid trajectories in store: {}".format(self.num_store_demos))
+        self.value_losses = np.zeros(self.num_store_demos)
+        if self.num_learn_demos > self.num_store_demos:
+            self.num_learn_demos = self.num_store_demos
+            print("Warning - number of valid demonstrations is less than the demonstration learning number")
         i = 0
         while i < self.num_store_demos:
             start_index = i
             j = 0
-            while j < self.demo_buffer.max_samples:
+            while j < self.demo_buffer.max_samples and i < self.num_store_demos:
                 demo_obs_t, demo_hidden_state_t, demo_act_t, demo_rew_t, demo_done_t = self.demo_storage.get_demo_trajectory(
                     store_index=i)
                 self.demo_buffer.store(demo_obs_t, demo_hidden_state_t, demo_act_t, demo_rew_t, demo_done_t)
@@ -315,6 +319,59 @@ class BanditController(BaseController):
                  "demo value loss window": 0.0 if len(self.demo_val_loss_window) == 0 else np.round(
                      np.mean(self.demo_val_loss_window), 3),
                  "ratio (env/demo)": np.round(demo_ratio, 3)}
+        return stats
+
+
+class ValueLossScheduler(BanditController):
+    """Scheduler that prioritises demonstrations based on their latest value losses. Halfway between the linear scheduler
+    and the bandit controller. Inherits from BanditController"""
+
+    def __init__(self, args, params, rollout, demo_storage, demo_buffer, actor_critic, schedule='linear'):
+        super().__init__(args, params, rollout, demo_storage, demo_buffer, actor_critic)
+
+        self.controller_type = "value_loss_schedule"
+        self.num_timesteps = args.num_timesteps
+        self.demo_schedule = schedule
+        self.demo_learn_ratio = params.demo_learn_ratio
+        self.rollout = rollout  # environment rollout
+        self.demo_storage = demo_storage
+        self.n_envs = params.n_envs
+        self.n_steps = params.n_steps
+        self.demo_sampling = params.demo_sampling
+        self.num_demo_seeds = params.num_learn_demos
+        self.demo_limit = params.demo_limit
+        self.demo_levels = params.demo_levels
+        self.demo_learn_count = 0
+        self.replace_count = 0
+        self.replace = params.replace
+
+    def learn_from_demos(self, curr_timestep):
+        """Learn from the replay buffer"""
+        if self.demo_limit:
+            if curr_timestep > self.demo_limit:
+                return False
+        learn_every = (1 / self.demo_learn_ratio) * self.n_envs * self.n_steps
+        if curr_timestep > ((self.demo_learn_count + 1) * learn_every):
+            self.demo_learn_count += 1
+            self.learn_from = 1
+            return True
+        else:
+            return False
+
+    def learn_from_env(self):
+        """Learn from the environment, always True"""
+        self.learn_from = 0
+        return True
+
+    def update(self):
+        """Update the value losses"""
+        if self.learn_from == 1:
+            self._update_value_losses()
+            self.demo_val_loss_window.append(np.mean(self.demo_buffer.compute_value_losses().numpy()))
+
+    def get_stats(self):
+        stats = {"demo learning steps": self.demo_learn_count,
+                 "demo value loss window": 0.0 if len(self.demo_val_loss_window) == 0 else np.mean(self.demo_val_loss_window)}
         return stats
 
 

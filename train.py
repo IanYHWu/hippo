@@ -12,7 +12,7 @@ from common.rollout import Rollout
 from common.rollout import DemoRollout
 from common.rollout import DemoBuffer
 from common.rollout import DemoStorage
-from common.controller import DemoScheduler, BanditController
+from common.controller import DemoScheduler, BanditController, ValueLossScheduler
 from test import Evaluator
 
 from agents.demonstrator import SyntheticDemonstrator
@@ -103,7 +103,6 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
 
         # demonstration-learning step
         if demo and controller.learn_from_demos(curr_timestep):
-            # query the demonstrator for a single demonstration
             if params.store_mode:
                 demo_learn_indices = controller.get_learn_indices()
                 for index in demo_learn_indices:
@@ -116,7 +115,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                                 store_index=index)
             else:
                 # non-store model only works with schedule-type controller
-                assert controller.controller_type == "schedule"
+                assert controller.controller_type == "simple_schedule"
                 demo_gather_seeds, _ = controller.get_new_seeds(replace_mode=False)
                 for seed in demo_gather_seeds:
                     gather_demo(seed, demonstrator, demo_rollout, demo_buffer, params, demo_storage=None,
@@ -129,7 +128,6 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
         if demo:
             if args.log_demo_stats:
                 stats_dict = controller.get_stats()
-                print(stats_dict)
                 logger.log_demo_stats(stats_dict)
             controller.update()
             demo_buffer.reset()
@@ -186,7 +184,7 @@ def gather_demo(seed, demonstrator, demo_rollout, demo_buffer, params, demo_stor
             demo_rollout.reset()
             demo_env.close()
             tries += 1
-            if tries == 20:
+            if tries == 30:
                 # if this level has yielded 10 bad trajectories, skip it
                 break
 
@@ -268,6 +266,9 @@ def main(args):
         elif params.demo_controller == 'bandit':
             print('Using Bandit Controller')
             controller = BanditController(args, params, rollout, demo_storage, demo_buffer, actor_critic)
+        elif params.demo_controller == 'value_loss_schedule':
+            print('Using Value Loss Schedule')
+            controller = ValueLossScheduler(args, params, rollout, demo_storage, demo_buffer, actor_critic)
         else:
             raise NotImplementedError
         print("Initialising demonstrator...")
