@@ -126,6 +126,8 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
             # reset the replay buffer after a learning step
 
         if demo:
+            stats_dict = controller.get_stats()
+            print(stats_dict)
             if args.log_demo_stats:
                 stats_dict = controller.get_stats()
                 logger.log_demo_stats(stats_dict)

@@ -327,7 +327,10 @@ class BanditController(BaseController):
                      np.mean(self.env_val_loss_window), 3),
                  "demo value loss window": 0.0 if len(self.demo_val_loss_window) == 0 else np.round(
                      np.mean(self.demo_val_loss_window), 3),
-                 "ratio (env/demo)": np.round(demo_ratio, 3)}
+                 "ratio (env/demo)": np.round(demo_ratio, 3),
+                 "stale median": np.median(self.staleness),
+                 "stale max": np.max(self.staleness),
+                 "stale min": np.min(self.staleness)}
         return stats
 
 
@@ -380,7 +383,10 @@ class ValueLossScheduler(BanditController):
 
     def get_stats(self):
         stats = {"demo learning steps": self.demo_learn_count,
-                 "demo value loss window": 0.0 if len(self.demo_val_loss_window) == 0 else np.mean(self.demo_val_loss_window)}
+                 "demo value loss window": 0.0 if len(self.demo_val_loss_window) == 0 else np.mean(self.demo_val_loss_window),
+                 "stale median": np.median(self.staleness),
+                 "stale max": np.max(self.staleness),
+                 "stale min": np.min(self.staleness)}
         return stats
 
 
