@@ -151,7 +151,8 @@ class ParamLoader:
         # Bandit controller
         self.scoring_method = 'rank'
         self.temperature = 0.5
-        self.rho = 0.5  # demo score scaling - downweights the demo feedback
+        self.rho = 0.3  # staleness coefficient
+        self.mu = 0.5  # demo score scaling - downweights the demo feedback
 
         # read in yaml config file and overwrite the appropriate defaults
         with open('hyperparams/config.yml', 'r') as f:

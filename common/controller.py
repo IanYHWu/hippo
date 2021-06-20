@@ -208,6 +208,7 @@ class BanditController(BaseController):
         self.rollout = rollout  # env rollout
         self.max_samples = params.demo_store_max_samples
         self.value_losses = None
+        self.staleness = None
         self.last_demo_indices = None
         self.demo_storage = demo_storage
         self.demo_buffer = demo_buffer
@@ -217,6 +218,7 @@ class BanditController(BaseController):
         self.temperature = params.temperature
         self.num_learn_demos = params.num_learn_demos
         self.rho = params.rho
+        self.mu = params.mu
 
         self.num_store_demos = 0
         self.env_val_loss_window = deque(maxlen=5)
@@ -229,6 +231,7 @@ class BanditController(BaseController):
         self.num_store_demos = self.demo_storage.get_n_samples()
         print("Number of valid trajectories in store: {}".format(self.num_store_demos))
         self.value_losses = np.zeros(self.num_store_demos)
+        self.staleness = np.zeros(self.num_store_demos)
         if self.num_learn_demos > self.num_store_demos:
             self.num_learn_demos = self.num_store_demos
             print("Warning - number of valid demonstrations is less than the demonstration learning number")
@@ -285,6 +288,7 @@ class BanditController(BaseController):
         latest_value_losses = self.demo_buffer.compute_value_losses().numpy()
         for index, i in enumerate(self.last_demo_indices):
             self.value_losses[i] = latest_value_losses[index]
+            self.staleness[i] += 1
 
     def update(self):
         """Update the bandit"""
@@ -296,11 +300,16 @@ class BanditController(BaseController):
         """Decide which demos to learn from"""
         if self.scoring_method == 'rank':  # rank prioritisation
             ranking = np.argsort(self.value_losses * -1)
-            scores = (1 / (np.arange(0, len(ranking)) + 1)) ** self.temperature
-            scores /= np.sum(scores)
-            ranking, P = zip(*sorted(zip(ranking, scores)))
-            indices = np.random.choice(self.num_store_demos, self.num_learn_demos, replace=False, p=list(P))
+            val_scores = (1 / (np.arange(0, len(ranking)) + 1)) ** self.temperature
+            val_scores /= np.sum(val_scores)
+            ranking, val_p = zip(*sorted(zip(ranking, val_scores)))
+            c = self.demo_learn_count
+            stale_score = c - self.staleness
+            stale_p = stale_score / np.sum(stale_score)
+            P = (1 - self.rho) * np.array(list(val_p)) + self.rho * stale_p
+            indices = np.random.choice(self.num_store_demos, self.num_learn_demos, replace=False, p=P)
             self.last_demo_indices = indices
+
             return indices.tolist()
         else:
             raise NotImplementedError
