@@ -134,6 +134,7 @@ class ParamLoader:
         self.demo_entropy_coef = 0.01
         self.demo_value_coef = 0.005
         self.demo_max_steps = 999  # max acceptable length of demo trajectories
+        self.reward_filter = False
         self.demo_normalise_adv = False  # normalise demo advantages
         self.demo_lr_schedule = False  # learning rate scheduler for demo learning steps
         self.buffer_max_samples = 100  # max capacity of demo buffer

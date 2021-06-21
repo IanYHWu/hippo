@@ -160,6 +160,7 @@ tiny_hippo_val_schedule:
     demo_entropy_coef: 0.01
     demo_value_coef: 0.005
     demo_max_steps: 256
+    reward_filter: False
     num_learn_demos: 5
     pre_load: 10
     pre_load_seed_sampling: fixed
