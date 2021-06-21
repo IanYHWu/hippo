@@ -236,6 +236,8 @@ class BanditController(BaseController):
             self.num_learn_demos = self.num_store_demos
             print("Warning - number of valid demonstrations is less than the demonstration learning number")
         i = 0
+        demo_rewards = self.demo_storage.env_rewards
+        print("Demonstration rewards: {}".format(demo_rewards))
         while i < self.num_store_demos:
             start_index = i
             j = 0
@@ -288,7 +290,7 @@ class BanditController(BaseController):
         latest_value_losses = self.demo_buffer.compute_value_losses().numpy()
         for index, i in enumerate(self.last_demo_indices):
             self.value_losses[i] = latest_value_losses[index]
-            self.staleness[i] += 1
+            self.staleness[i] = self.demo_learn_count
 
     def update(self):
         """Update the bandit"""
@@ -309,7 +311,6 @@ class BanditController(BaseController):
             P = (1 - self.rho) * np.array(list(val_p)) + self.rho * stale_p
             indices = np.random.choice(self.num_store_demos, self.num_learn_demos, replace=False, p=P)
             self.last_demo_indices = indices
-
             return indices.tolist()
         else:
             raise NotImplementedError
@@ -328,9 +329,9 @@ class BanditController(BaseController):
                  "demo value loss window": 0.0 if len(self.demo_val_loss_window) == 0 else np.round(
                      np.mean(self.demo_val_loss_window), 3),
                  "ratio (env/demo)": np.round(demo_ratio, 3),
-                 "stale median": np.median(self.staleness),
-                 "stale max": np.max(self.staleness),
-                 "stale min": np.min(self.staleness)}
+                 "stale median": np.median(self.demo_learn_count - self.staleness),
+                 "stale max": np.max(self.demo_learn_count - self.staleness),
+                 "stale min": np.min(self.demo_learn_count - self.staleness)}
         return stats
 
 

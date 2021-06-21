@@ -176,20 +176,31 @@ class DemoRollout:
         self.act_store = torch.zeros(self.num_steps)
         self.rew_store = torch.zeros(self.num_steps)
         self.done_store = torch.ones(self.num_steps)
+        self.info_store = deque(maxlen=self.num_steps)
         self.step = 0
 
-    def store(self, obs, hidden_state, act, rew, done):
+    def store(self, obs, hidden_state, act, rew, done, info):
         """Insert transition data into the rollout """
         self.obs_store[self.step] = torch.from_numpy(obs.copy())
         self.hidden_states_store[self.step] = torch.from_numpy(hidden_state.copy())
         self.act_store[self.step] = torch.from_numpy(act.copy())
         self.rew_store[self.step] = torch.from_numpy(rew.copy())
         self.done_store[self.step] = torch.from_numpy(done.copy())
+        self.info_store.append(info)
         self.step += 1
 
     def get_demo_trajectory(self):
         """Return the trajectories collected"""
-        return self.obs_store, self.hidden_states_store, self.act_store, self.rew_store, self.done_store
+        env_reward = self.get_env_rewards()
+        return self.obs_store, self.hidden_states_store, self.act_store, self.rew_store, self.done_store, env_reward
+
+    def get_env_rewards(self):
+        sum_rewards = 0
+        for step in range(len(self.info_store)):
+            info = self.info_store[step]
+            sum_rewards += info[0]['env_reward']
+
+        return sum_rewards
 
 
 class DemoStorage:
@@ -226,13 +237,15 @@ class DemoStorage:
         self.act_store = torch.zeros(self.max_samples, self.num_steps)
         self.rew_store = torch.zeros(self.max_samples, self.num_steps)
         self.done_store = torch.zeros(self.max_samples, self.num_steps)
+        self.env_rewards = torch.zeros(self.max_samples)
         self.curr_ind = 0
         self.step = 0
         self.storage_full = False
         self.seed_to_ind = {}  # guide - maps seed to indices
         self.ind_to_seed = {}  # guide - maps index to seed
 
-    def store(self, obs_trajectory, hidden_state_trajectory, act_trajectory, rew_trajectory, done_trajectory, store_index=None):
+    def store(self, obs_trajectory, hidden_state_trajectory, act_trajectory, rew_trajectory, done_trajectory,
+              env_reward, store_index=None):
         """Insert trajectory data in the demo store. Inserts entire trajectories"""
         if store_index is not None:
             index = store_index
@@ -243,6 +256,7 @@ class DemoStorage:
         self.act_store[index, :] = act_trajectory
         self.rew_store[index, :] = rew_trajectory
         self.done_store[index, :] = done_trajectory
+        self.env_rewards[index] = env_reward
         if store_index is None:
             self.curr_ind += 1
         # once we reach full capacity, overwrite the oldest sample
@@ -449,4 +463,3 @@ class DemoBuffer:
                       mask_batch, log_prob_act_batch, val_batch, adv_batch
         else:
             raise NotImplementedError
-
