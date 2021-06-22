@@ -205,15 +205,15 @@ main_hippo_val_schedule:
     demo_entropy_coef: 0.01
     demo_value_coef: 0.005
     demo_max_steps: 256
-    num_learn_demos: 32
-    pre_load: 200
+    num_learn_demos: 3
+    pre_load: 5
     pre_load_seed_sampling: fixed
-    demo_levels: 200
-    buffer_max_samples: 32
+    demo_levels: 5
+    buffer_max_samples: 3
     store_mode: True
-    demo_store_max_samples: 200
+    demo_store_max_samples: 5
     demo_sampling: random
     demo_normalise_adv: False
     demo_lr_schedule: False
-    temperature: 10
+    temperature: 5
     rho: 0.1

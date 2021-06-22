@@ -387,7 +387,8 @@ class ValueLossScheduler(BanditController):
                  "demo value loss window": 0.0 if len(self.demo_val_loss_window) == 0 else np.mean(self.demo_val_loss_window),
                  "stale median": np.median(self.staleness),
                  "stale max": np.max(self.staleness),
-                 "stale min": np.min(self.staleness)}
+                 "stale min": np.min(self.staleness),
+                 "value losses": list(self.value_losses)}
         return stats
 
 
