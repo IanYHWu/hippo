@@ -189,7 +189,7 @@ def gather_demo(seed, demonstrator, demo_rollout, demo_buffer, params, demo_stor
             demo_rollout.reset()
             demo_env.close()
             tries += 1
-            if tries == 50:
+            if tries == 100:
                 # if this level has yielded 10 bad trajectories, skip it
                 break
 

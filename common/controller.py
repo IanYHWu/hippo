@@ -388,7 +388,11 @@ class ValueLossScheduler(BanditController):
                  "stale median": np.median(self.staleness),
                  "stale max": np.max(self.staleness),
                  "stale min": np.min(self.staleness),
-                 "value losses": list(self.value_losses)}
+                 "value loss 1": self.value_losses[0],
+                 "value loss 2": self.value_losses[1],
+                 "value loss 3": self.value_losses[2],
+                 "value loss 4": self.value_losses[3],
+                 "value loss 5": self.value_losses[4]}
         return stats
 
 
