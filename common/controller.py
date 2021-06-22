@@ -335,7 +335,12 @@ class BanditController(BaseController):
                  "ratio (env/demo)": np.round(demo_ratio, 3),
                  "stale median": np.median(self.demo_learn_count - self.staleness),
                  "stale max": np.max(self.demo_learn_count - self.staleness),
-                 "stale min": np.min(self.demo_learn_count - self.staleness)}
+                 "stale min": np.min(self.demo_learn_count - self.staleness),
+                 "val loss 1": self.value_losses[0],
+                 "val loss 2": self.value_losses[1],
+                 "val loss 3": self.value_losses[2],
+                 "val loss 4": self.value_losses[3],
+                 "val loss 5": self.value_losses[4]}
         return stats
 
 
