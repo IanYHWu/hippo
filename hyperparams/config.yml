@@ -169,6 +169,7 @@ tiny_hippo_val_schedule:
     store_mode: True
     demo_store_max_samples: 10
     replace: 0
+    demo_sampling_replace: True
     demo_normalise_adv: False
     demo_lr_schedule: False
     temperature: 10

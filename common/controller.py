@@ -217,6 +217,7 @@ class BanditController(BaseController):
         self.scoring_method = params.scoring_method
         self.temperature = params.temperature
         self.num_learn_demos = params.num_learn_demos
+        self.demo_sampling_replace = params.demo_sampling_replace
         self.rho = params.rho
         self.mu = params.mu
 
@@ -309,7 +310,10 @@ class BanditController(BaseController):
             stale_score = c - self.staleness
             stale_p = stale_score / np.sum(stale_score)
             P = (1 - self.rho) * np.array(list(val_p)) + self.rho * stale_p
-            indices = np.random.choice(self.num_store_demos, self.num_learn_demos, replace=False, p=P)
+            if self.demo_sampling_replace:
+                indices = np.random.choice(self.num_store_demos, self.num_learn_demos, replace=True, p=P)
+            else:
+                indices = np.random.choice(self.num_store_demos, self.num_learn_demos, replace=False, p=P)
             self.last_demo_indices = indices
             return indices.tolist()
         else:
@@ -387,12 +391,7 @@ class ValueLossScheduler(BanditController):
                  "demo value loss window": 0.0 if len(self.demo_val_loss_window) == 0 else np.mean(self.demo_val_loss_window),
                  "stale median": np.median(self.staleness),
                  "stale max": np.max(self.staleness),
-                 "stale min": np.min(self.staleness),
-                 "value loss 1": self.value_losses[0],
-                 "value loss 2": self.value_losses[1],
-                 "value loss 3": self.value_losses[2],
-                 "value loss 4": self.value_losses[3],
-                 "value loss 5": self.value_losses[4]}
+                 "stale min": np.min(self.staleness)}
         return stats
 
 

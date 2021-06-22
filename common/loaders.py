@@ -151,6 +151,7 @@ class ParamLoader:
         self.replace = 0  # no. of demos in the storage to replace per demo learn step. Used with store_mode
         # Bandit controller
         self.scoring_method = 'rank'
+        self.demo_sampling_replace = False  # during demo sampling, sample with replacement
         self.temperature = 0.5
         self.rho = 0.3  # staleness coefficient
         self.mu = 0.5  # demo score scaling - downweights the demo feedback
