@@ -131,7 +131,7 @@ tiny_hippo_bandit:
 
 tiny_hippo_val_schedule:
     n_envs: 2
-    n_steps: 16
+    n_steps: 256
     n_checkpoints: 2
     epoch: 3
     mini_batch_per_epoch: 8
@@ -172,7 +172,9 @@ tiny_hippo_val_schedule:
     demo_sampling_replace: True
     demo_normalise_adv: False
     demo_lr_schedule: False
-    temperature: 10
+    alpha: 0.3
+    eta: 0.5
+    temperature: 5
     rho: 0.1
 
 main_hippo_val_schedule:

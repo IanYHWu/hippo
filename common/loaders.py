@@ -152,9 +152,11 @@ class ParamLoader:
         # Bandit controller
         self.scoring_method = 'rank'
         self.demo_sampling_replace = False  # during demo sampling, sample with replacement
+        self.alpha = 1  # EMA coefficient for tracking env value losses. 1 => account for only the latest reading
         self.temperature = 0.5
         self.rho = 0.3  # staleness coefficient
         self.mu = 0.5  # demo score scaling - downweights the demo feedback
+        self.eta = 0  # weighting of environment val losses relative to demo val losses when computing val loss score
 
         # read in yaml config file and overwrite the appropriate defaults
         with open('hyperparams/config.yml', 'r') as f:
@@ -166,6 +168,3 @@ class ParamLoader:
         """Create the loader object, overwriting defaults when needed"""
         for key, val in params_dict.items():
             setattr(self, key, val)
-
-
-

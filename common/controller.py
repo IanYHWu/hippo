@@ -206,8 +206,15 @@ class BanditController(BaseController):
         self.controller_type = "bandit"
         self.bandit = EXP3()
         self.rollout = rollout  # env rollout
+        self.n_envs = params.n_envs
+        self.n_steps = params.n_steps
         self.max_samples = params.demo_store_max_samples
-        self.value_losses = None
+        self.demo_value_losses = None
+        self.env_value_losses = None
+        self.env_value_losses_init = None
+        self.env_adv_tracker = np.zeros(self.n_envs)
+        self.env_step_tracker = np.zeros(self.n_envs)
+        self.alpha = params.alpha
         self.staleness = None
         self.last_demo_indices = None
         self.demo_storage = demo_storage
@@ -220,6 +227,7 @@ class BanditController(BaseController):
         self.demo_sampling_replace = params.demo_sampling_replace
         self.rho = params.rho
         self.mu = params.mu
+        self.eta = params.eta
 
         self.num_store_demos = 0
         self.env_val_loss_window = deque(maxlen=5)
@@ -231,7 +239,9 @@ class BanditController(BaseController):
         """Initialise the value loss scores of individual demos"""
         self.num_store_demos = self.demo_storage.get_n_samples()
         print("Number of valid trajectories in store: {}".format(self.num_store_demos))
-        self.value_losses = np.zeros(self.num_store_demos)
+        self.demo_value_losses = np.zeros(self.num_store_demos)
+        self.env_value_losses = np.zeros(self.num_store_demos)
+        self.env_value_losses_init = np.zeros(self.num_store_demos)
         self.staleness = np.zeros(self.num_store_demos)
         if self.num_learn_demos > self.num_store_demos:
             self.num_learn_demos = self.num_store_demos
@@ -251,7 +261,7 @@ class BanditController(BaseController):
             self.demo_buffer.compute_pi_v(self.actor_critic)
             self.demo_buffer.compute_estimates(self.actor_critic)
             value_losses = self.demo_buffer.compute_value_losses().numpy()
-            self.value_losses[start_index: i] = value_losses
+            self.demo_value_losses[start_index: i] = value_losses
             self.demo_buffer.reset()
 
     def learn_from_env(self):
@@ -280,44 +290,79 @@ class BanditController(BaseController):
         """Update the bandit with feedback - helper method"""
         if self.learn_from == 0:
             feedback = torch.mean(torch.abs(self.rollout.adv_batch)).item()
-            self.env_val_loss_window.append(feedback)
         else:
-            feedback = self.rho * np.mean(self.demo_buffer.compute_value_losses().numpy())
-            self.demo_val_loss_window.append(feedback)
+            feedback = self.mu * np.mean(self.demo_buffer.compute_value_losses().numpy())
         self.bandit.update(feedback)
 
-    def _update_value_losses(self):
-        """Update the value loss scores"""
+    def _update_demo_value_losses(self):
+        """Update the demo value loss scores"""
         latest_value_losses = self.demo_buffer.compute_value_losses().numpy()
         for index, i in enumerate(self.last_demo_indices):
-            self.value_losses[i] = latest_value_losses[index]
+            self.demo_value_losses[i] = latest_value_losses[index]
             self.staleness[i] = self.demo_learn_count
+
+    def _update_env_value_losses(self):
+        """Update the env value loss scores"""
+        adv_batch = self.rollout.adv_batch
+        done_batch = self.rollout.done_batch
+        info_batch = self.rollout.info_batch
+        for i in range(self.n_envs):
+            for j in range(self.n_steps):
+                if not done_batch[j][i]:
+                    # update the trackers in an online manner
+                    self.env_step_tracker[i] += 1
+                    self.env_adv_tracker[i] += (1 / self.env_step_tracker[i]) * (
+                                abs(adv_batch[j][i]) - self.env_adv_tracker[i])
+                else:
+                    # once a trajectory is done, store the time-averaged value losses and the seed, reset the trackers
+                    seed = info_batch[j][i]['prev_level_seed']
+                    # only process the seeds which have a corresponding demo in storage
+                    if seed in self.demo_storage.seed_to_ind:
+                        inds = self.demo_storage.seed_to_ind[seed]  # list of store indices with demo of seed
+                        for ind in inds:
+                            # check if this is the first datum for the index
+                            if self.env_value_losses_init[ind] == 0:
+                                self.env_value_losses[ind] = self.env_adv_tracker[i]
+                                self.env_value_losses_init[ind] = 1
+                            else:
+                                self.env_value_losses[ind] = self.alpha * self.env_adv_tracker[i] + (1 - self.alpha) * \
+                                                              self.env_value_losses[ind]
+                    self.env_adv_tracker[i] = 0
+                    self.env_step_tracker[i] = 0
 
     def update(self):
         """Update the bandit"""
         self._update_bandit()
         if self.learn_from == 1:
-            self._update_value_losses()
+            self._update_demo_value_losses()
+            self.demo_val_loss_window.append(np.mean(self.demo_value_losses))
+        else:
+            self._update_env_value_losses()
+            self.env_val_loss_window.append(np.mean(self.env_value_losses))
 
     def get_learn_indices(self):
         """Decide which demos to learn from"""
+        combined_val_loss = (1 - self.eta) * self.demo_value_losses + self.eta * self.env_value_losses
         if self.scoring_method == 'rank':  # rank prioritisation
-            ranking = np.argsort(self.value_losses * -1)
+            ranking = np.argsort(combined_val_loss * -1)
             val_scores = (1 / (np.arange(0, len(ranking)) + 1)) ** self.temperature
             val_scores /= np.sum(val_scores)
             ranking, val_p = zip(*sorted(zip(ranking, val_scores)))
-            c = self.demo_learn_count
-            stale_score = c - self.staleness
-            stale_p = stale_score / np.sum(stale_score)
-            P = (1 - self.rho) * np.array(list(val_p)) + self.rho * stale_p
-            if self.demo_sampling_replace:
-                indices = np.random.choice(self.num_store_demos, self.num_learn_demos, replace=True, p=P)
-            else:
-                indices = np.random.choice(self.num_store_demos, self.num_learn_demos, replace=False, p=P)
-            self.last_demo_indices = indices
-            return indices.tolist()
+        elif self.scoring_method == 'proportional':
+            val_scores = combined_val_loss ** self.temperature
+            val_p = val_scores / np.sum(val_scores)
         else:
             raise NotImplementedError
+        c = self.demo_learn_count
+        stale_score = c - self.staleness
+        stale_p = stale_score / np.sum(stale_score)
+        P = (1 - self.rho) * np.array(list(val_p)) + self.rho * stale_p
+        if self.demo_sampling_replace:
+            indices = np.random.choice(self.num_store_demos, self.num_learn_demos, replace=True, p=P)
+        else:
+            indices = np.random.choice(self.num_store_demos, self.num_learn_demos, replace=False, p=P)
+        self.last_demo_indices = indices
+        return indices.tolist()
 
     def get_new_seeds(self, replace_mode=True):
         """Sample a list of seeds - used for gathering trajectories"""
@@ -383,20 +428,27 @@ class ValueLossScheduler(BanditController):
     def update(self):
         """Update the value losses"""
         if self.learn_from == 1:
-            self._update_value_losses()
-            self.demo_val_loss_window.append(np.mean(self.demo_buffer.compute_value_losses().numpy()))
+            self._update_demo_value_losses()
+            self.demo_val_loss_window.append(np.mean(self.demo_value_losses))
+        else:
+            self._update_env_value_losses()
+            self.env_val_loss_window.append(np.mean(self.env_value_losses))
 
     def get_stats(self):
         stats = {"demo learning steps": self.demo_learn_count,
-                 "demo value loss window": 0.0 if len(self.demo_val_loss_window) == 0 else np.mean(self.demo_val_loss_window),
+                 "demo value loss window": 0.0 if len(self.demo_val_loss_window) == 0 else np.mean(
+                     self.demo_val_loss_window),
+                 "env value loss window": 0.0 if len(self.env_val_loss_window) == 0 else np.round(
+                     np.mean(self.env_val_loss_window), 3),
                  "stale median": np.median(self.staleness),
                  "stale max": np.max(self.staleness),
-                 "stale min": np.min(self.staleness),
-                 "val loss 1": self.value_losses[0],
-                 "val loss 2": self.value_losses[1],
-                 "val loss 3": self.value_losses[2],
-                 "val loss 4": self.value_losses[3],
-                 "val loss 5": self.value_losses[4]}
+                 "stale min": np.min(self.staleness)
+                 # "val loss 1": self.demo_value_losses[0],
+                 # "val loss 2": self.demo_value_losses[1],
+                 # "val loss 3": self.demo_value_losses[2],
+                 # "val loss 4": self.demo_value_losses[3],
+                 # "val loss 5": self.demo_value_losses[4]
+                 }
         return stats
 
 
