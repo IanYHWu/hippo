@@ -258,7 +258,6 @@ class BanditController(BaseController):
                 self.demo_buffer.store(demo_obs_t, demo_hidden_state_t, demo_act_t, demo_rew_t, demo_done_t)
                 j += 1
                 i += 1
-            self.demo_buffer.compute_pi_v(self.actor_critic)
             self.demo_buffer.compute_estimates(self.actor_critic)
             value_losses = self.demo_buffer.compute_value_losses().numpy()
             self.demo_value_losses[start_index: i] = value_losses
@@ -296,6 +295,7 @@ class BanditController(BaseController):
 
     def _update_demo_value_losses(self):
         """Update the demo value loss scores"""
+        self.demo_buffer.compute_estimates(self.actor_critic)
         latest_value_losses = self.demo_buffer.compute_value_losses().numpy()
         for index, i in enumerate(self.last_demo_indices):
             self.demo_value_losses[i] = latest_value_losses[index]
