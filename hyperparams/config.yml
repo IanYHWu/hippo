@@ -169,13 +169,15 @@ tiny_hippo_val_schedule:
     store_mode: True
     demo_store_max_samples: 10
     replace: 0
-    demo_sampling_replace: True
+    demo_sampling_replace: False
+    demo_transition_sampling: prioritised
     demo_normalise_adv: False
     demo_lr_schedule: False
     alpha: 0.3
     eta: 0.5
     temperature: 5
     rho: 0.1
+    nu: 0.6
 
 main_hippo_val_schedule:
     n_envs: 64

@@ -33,7 +33,9 @@ class HIPPO(PPO):
                  demo_epochs=3,
                  demo_value_coef=0.05,
                  demo_entropy_coef=0.01,
-                 demo_normalise_adv=False):
+                 demo_normalise_adv=False,
+                 demo_transition_sampling='uniform',
+                 nu=1):
 
         super().__init__(env, actor_critic, storage, device)
 
@@ -59,6 +61,8 @@ class HIPPO(PPO):
         self.demo_value_coef = demo_value_coef
         self.demo_entropy_coef = demo_entropy_coef
         self.demo_normalise_adv = demo_normalise_adv
+        self.demo_transition_sampling = demo_transition_sampling
+        self.nu = nu
 
     def demo_optimize(self, lr_schedule):
         """Learn from samples in the the demonstrations replay buffer"""
@@ -89,7 +93,9 @@ class HIPPO(PPO):
             recurrent = self.actor_critic.is_recurrent()
             generator = self.demo_buffer.demo_generator(batch_size=batch_size,
                                                         mini_batch_size=mini_batch_size,
-                                                        recurrent=recurrent)
+                                                        recurrent=recurrent,
+                                                        sampling_method=self.demo_transition_sampling,
+                                                        nu=self.nu)
             for sample in generator:
                 obs_batch, hidden_state_batch, act_batch, return_batch, mask_batch, old_log_prob_act_batch, \
                 old_value_batch, adv_batch = sample
@@ -152,6 +158,8 @@ def get_args_hippo(params):
                   'demo_batch_size': params.demo_batch_size,
                   'demo_value_coef': params.demo_value_coef,
                   'demo_entropy_coef': params.demo_entropy_coef,
-                  'demo_normalise_adv': params.demo_normalise_adv}
+                  'demo_normalise_adv': params.demo_normalise_adv,
+                  'demo_transition_sampling': params.demo_transition_sampling,
+                  'nu': params.nu}
 
     return param_dict

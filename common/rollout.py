@@ -440,10 +440,17 @@ class DemoBuffer:
 
         return value_losses
 
-    def demo_generator(self, batch_size, mini_batch_size, recurrent=False):
+    def demo_generator(self, batch_size, mini_batch_size, recurrent=False, sampling_method='uniform', nu=1):
         """Create generator to sample transitions from the replay buffer - used for both HIPPO and IL"""
         if not recurrent:
-            weights = self.sample_mask_store.squeeze(-1).reshape(-1)  # ignore all padding transitions when sampling
+            if sampling_method == 'uniform':
+                weights = self.sample_mask_store.squeeze(-1).reshape(-1)  # ignore all padding transitions when sampling
+            elif sampling_method == 'prioritised':
+                abs_advs = torch.abs(self.adv_store.reshape(-1)) * self.sample_mask_store.squeeze(-1).reshape(-1)
+                weights = abs_advs ** nu
+                weights /= torch.sum(weights)
+            else:
+                raise NotImplementedError
             sampler = BatchSampler(WeightedRandomSampler(weights, int(batch_size), replacement=False),
                                    mini_batch_size, drop_last=True)
             for indices in sampler:
