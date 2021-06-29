@@ -144,6 +144,7 @@ class ParamLoader:
         self.demo_learn_ratio = 0.1  # ratio of demo-learning steps to env steps
         self.demo_levels = 200  # number of seeds we permit demonstrations of
         self.demo_sampling = 'random'
+        self.demo_transition_sampling = 'uniform'  # sampling strategy for demo buffer transitions
         self.num_learn_demos = 64  # number of demo trajectories sampled per demo learning step
         self.demo_limit = None  # no. of timesteps beyond which no demo learning is permitted
         self.store_mode = True  # store demos and re-use
