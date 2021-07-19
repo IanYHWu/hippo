@@ -13,6 +13,9 @@ parser.add_argument(
     '--load_checkpoint', action='store_true', help='Continue training from a checkpoint'
 )
 parser.add_argument(
+    '--pretrained_policy_path', type=str, default=None, help='Path to pre-trained policy'
+)
+parser.add_argument(
     '--log_dir', type=str, default='..', help='Logging directory'
 )
 parser.add_argument(
