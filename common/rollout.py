@@ -296,6 +296,12 @@ class DemoStorage:
         else:
             return self.curr_ind
 
+    def get_n_valid_transitions(self):
+        """Count the number of non-padding transitions stored in the buffer"""
+        mask = 1 - self.done_store
+        valid_samples = torch.count_nonzero(mask)
+        return valid_samples
+
     def get_demo_trajectory(self, store_index=None):
         """Extract demo trajectories from the storage by seed or by index"""
         index = store_index
@@ -441,7 +447,7 @@ class DemoBuffer:
         return value_losses
 
     def demo_generator(self, batch_size, mini_batch_size, recurrent=False, sampling_method='uniform', nu=1):
-        """Create generator to sample transitions from the replay buffer - used for both HIPPO and IL"""
+        """Create generator to sample transitions from the replay buffer"""
         if not recurrent:
             if sampling_method == 'uniform':
                 weights = self.sample_mask_store.squeeze(-1).reshape(-1)  # ignore all padding transitions when sampling
