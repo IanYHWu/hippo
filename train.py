@@ -43,7 +43,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
 
         # if hot start, load hot start trajectories into the buffer
         if params.store_mode and params.pre_load:
-            print("Pre-loading {} Demonstrations".format(params.pre_load))
+            print("Gathering {} Demonstrations".format(params.pre_load))
             # list of seeds to generate hot-start trajectories for
             demo_level_seeds = controller.get_preload_seeds()
             for seed in demo_level_seeds:
@@ -112,7 +112,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                     demo_buffer.store(demo_obs_t, demo_hidden_state_t, demo_act_t, demo_rew_t, demo_done_t)
                 demo_gather_seeds, demo_gather_indices = controller.get_new_seeds(replace_mode=True)
                 for seed, index in zip(demo_gather_seeds, demo_gather_indices):
-                    gather_demo(seed, demonstrator, demo_rollout, demo_buffer, params, demo_storage, store_mode=True,
+                    gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer, params, demo_storage, store_mode=True,
                                 store_index=index, reward_filter=params.reward_filter)
             else:
                 # non-store model only works with schedule-type controller
@@ -139,7 +139,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
     env.close()
 
 
-def gather_demo(seed, demonstrator, demo_rollout, demo_buffer, params, demo_storage=None, store_mode=False,
+def gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer, params, demo_storage=None, store_mode=False,
                 store_index=None, reward_filter=False):
     """Gather demonstration trajectories by seed"""
     # if the seed is not in the demo storage, or we aren't using demo_storage, get a demo and store it
@@ -197,6 +197,7 @@ def gather_demo(seed, demonstrator, demo_rollout, demo_buffer, params, demo_stor
 def main(args):
     added_timesteps = args.add_timesteps  # used if extra epochs need to be trained
     load_checkpoint = args.load_checkpoint
+    pretrained_policy_path = args.pretrained_policy_path
 
     if load_checkpoint:
         args = load_args(args.log_dir + '/' + args.name)
@@ -232,6 +233,10 @@ def main(args):
         print("Loading checkpoint: {}".format(args.log_dir + '/' + args.name))
         actor_critic, curr_timestep = logger.load_checkpoint(actor_critic)
         print("Current timestep = {}".format(curr_timestep))
+    if pretrained_policy_path:
+        print("Loading pre-trained policy: {}".format(pretrained_policy_path))
+        actor_critic = logger.load_policy(actor_critic)
+
     observation_shape = env.observation_space.shape
 
     print("Initialising rollout...")
