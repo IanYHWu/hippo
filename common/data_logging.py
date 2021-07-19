@@ -41,6 +41,7 @@ class Logger:
         self.name = self.args.name
         self.root_path = None
         self.checkpoint_path = None
+        self.pretrained_policy_path = self.args.pretrained_policy_path
         self.log_path = None
         self.demo_log_path = None
         self.n_envs = params.n_envs
@@ -97,7 +98,7 @@ class Logger:
             json.dump(self.args.__dict__, f, indent=2)
 
     def load_checkpoint(self, model):
-        """Load a policy"""
+        """Load a checkpoint policy"""
         checkpoint = torch.load(self.checkpoint_path)
         model.load_state_dict(checkpoint['model_state_dict'])
         curr_timestep = checkpoint['curr_timestep']
@@ -111,6 +112,13 @@ class Logger:
         self.curr_timestep = curr_timestep
 
         return model, curr_timestep
+
+    def load_policy(self, model):
+        """Load a pre-trained policy"""
+        checkpoint = torch.load(self.pretrained_policy_path)
+        model.load_state_dict(checkpoint['model_state_dict'])
+
+        return model
 
     def feed(self, rew_batch, done_batch, eval_reward=None, eval_len=None):
         """Feed data from the rollout buffer into the logger object"""
