@@ -27,6 +27,8 @@ def load_env(args, params, eval=False, demo=False, demo_level_seed=None, eval_se
                          distribution_mode=args.distribution_mode)
     elif demo and not eval:
         # demonstration-collecting mode
+        if demo_level_seed is None:
+            demo_level_seed = 0
         demo_level_seed = np.array([demo_level_seed], dtype='int32')  # it seems to bug out if we don't convert to numpy
         env = ProcgenEnv(num_envs=1,
                          env_name=args.env_name,
@@ -158,6 +160,7 @@ class ParamLoader:
         self.rho = 0.3  # staleness coefficient
         self.mu = 0.5  # demo score scaling - downweights the demo feedback
         self.eta = 0  # weighting of environment val losses relative to demo val losses when computing val loss score
+        self.nu = 1  # priortised sampling weighting
 
         # read in yaml config file and overwrite the appropriate defaults
         with open('hyperparams/config.yml', 'r') as f:
