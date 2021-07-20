@@ -1,10 +1,10 @@
 basic:
-  num_demos:  8
+  num_demos:  10
   reward_filter: False
   hidden_size: 256
-  demo_max_steps: 999
+  demo_max_steps: 256
   algo: bc
-  epochs: 3
+  epochs: 10
   mini_batch_size: 512
   learning_rate: 0.0005
   l2_coef: 0.001
