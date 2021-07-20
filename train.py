@@ -18,8 +18,10 @@ from test import Evaluator
 from agents.demonstrator import SyntheticDemonstrator
 
 
-def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params, evaluator=None,
-          controller=None, demo_rollout=None, demo_buffer=None, demo_storage=None, demonstrator=None):
+def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params,
+          evaluator=None,
+          controller=None, demo_rollout=None, demo_buffer=None, demo_storage=None,
+          demonstrator=None):
     """
     Train the RL agent, representing the main training loop
         agent: RL agent
@@ -48,7 +50,8 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
             demo_level_seeds = controller.get_preload_seeds()
             for seed in demo_level_seeds:
                 # gather demo trajectories by seed and store them
-                gather_demo(seed, demonstrator, demo_rollout, demo_buffer, params, demo_storage, store_mode=True,
+                gather_demo(seed, demonstrator, demo_rollout, demo_buffer, params, demo_storage,
+                            store_mode=True,
                             reward_filter=params.reward_filter)
         controller.initialise()
 
@@ -82,7 +85,8 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                 hidden_state = next_hidden_state
             _, _, last_val, hidden_state = agent.predict(obs, hidden_state, done)
             rollout.store_last(obs, hidden_state, last_val)
-            rollout.compute_estimates(params.gamma, params.lmbda, params.use_gae, params.normalise_adv)
+            rollout.compute_estimates(params.gamma, params.lmbda, params.use_gae,
+                                      params.normalise_adv)
             summary = agent.optimize()
 
             curr_timestep += params.n_steps * params.n_envs
@@ -109,17 +113,20 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                 for index in demo_learn_indices:
                     demo_obs_t, demo_hidden_state_t, demo_act_t, demo_rew_t, demo_done_t = demo_storage.get_demo_trajectory(
                         store_index=index)
-                    demo_buffer.store(demo_obs_t, demo_hidden_state_t, demo_act_t, demo_rew_t, demo_done_t)
+                    demo_buffer.store(demo_obs_t, demo_hidden_state_t, demo_act_t, demo_rew_t,
+                                      demo_done_t)
                 demo_gather_seeds, demo_gather_indices = controller.get_new_seeds(replace_mode=True)
                 for seed, index in zip(demo_gather_seeds, demo_gather_indices):
-                    gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer, params, demo_storage, store_mode=True,
+                    gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer, params,
+                                demo_storage, store_mode=True,
                                 store_index=index, reward_filter=params.reward_filter)
             else:
                 # non-store model only works with schedule-type controller
                 assert controller.controller_type == "simple_schedule"
                 demo_gather_seeds, _ = controller.get_new_seeds(replace_mode=False)
                 for seed in demo_gather_seeds:
-                    gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer, params, demo_storage=None,
+                    gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer, params,
+                                demo_storage=None,
                                 store_mode=False, reward_filter=params.reward_filter)
 
             # perform a demo-learning step
@@ -139,7 +146,8 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
     env.close()
 
 
-def gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer, params, demo_storage=None, store_mode=False,
+def gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer, params, demo_storage=None,
+                store_mode=False,
                 store_index=None, reward_filter=False):
     """Gather demonstration trajectories by seed"""
     # if the seed is not in the demo storage, or we aren't using demo_storage, get a demo and store it
@@ -159,7 +167,8 @@ def gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer, params, dem
                                                                     demo_done)
             demo_next_obs, demo_rew, demo_done, demo_info = demo_env.step(demo_act)
             # demo_rollout stores a single trajectory
-            demo_rollout.store(demo_obs, demo_hidden_state, demo_act, demo_rew, demo_done, demo_info)
+            demo_rollout.store(demo_obs, demo_hidden_state, demo_act, demo_rew, demo_done,
+                               demo_info)
             demo_obs = demo_next_obs
             demo_hidden_state = demo_next_hidden_state
             step_count += 1
@@ -205,7 +214,8 @@ def main(args):
     params = ParamLoader(args)
 
     set_global_seeds(args.seed)
-    set_global_log_levels(args.log_level)  # controls how many results we store in our logging buffer
+    set_global_log_levels(
+        args.log_level)  # controls how many results we store in our logging buffer
     print("Seed: {}".format(args.seed))
 
     num_timesteps = args.num_timesteps + added_timesteps
@@ -227,7 +237,7 @@ def main(args):
     env = load_env(args, params)
 
     print("Initialising model...")
-    pretrained_actor_critic = None
+    pretrained_actor_critic = load_model(params, env, device)
     actor_critic = load_model(params, env, device)
     curr_timestep = 0
     if load_checkpoint:
@@ -236,7 +246,7 @@ def main(args):
         print("Current timestep = {}".format(curr_timestep))
     if pretrained_policy_path:
         print("Loading pre-trained policy: {}".format(pretrained_policy_path))
-        pretrained_actor_critic = logger.load_policy(actor_critic)
+        pretrained_actor_critic = logger.load_policy(pretrained_actor_critic)
         if params.algo != "kickstarting":
             print("Training from pre-trained policy")
             actor_critic = pretrained_actor_critic
@@ -267,12 +277,14 @@ def main(args):
 
     if algo == 'hippo':
         print("Initialising demonstration rollout and buffer...")
-        demo_rollout = DemoRollout(observation_shape, params.hidden_size, params.demo_max_steps, device)
+        demo_rollout = DemoRollout(observation_shape, params.hidden_size, params.demo_max_steps,
+                                   device)
         demo_buffer = DemoBuffer(observation_shape, params.hidden_size, params.buffer_max_samples,
                                  params.demo_max_steps, device)
         if params.store_mode:
             print("Initialising demonstration storage")
-            demo_storage = DemoStorage(observation_shape, params.hidden_size, params.demo_store_max_samples,
+            demo_storage = DemoStorage(observation_shape, params.hidden_size,
+                                       params.demo_store_max_samples,
                                        params.demo_max_steps, device)
         else:
             demo_storage = None
@@ -280,31 +292,39 @@ def main(args):
         print("Initialising controller...")
         if params.demo_controller == 'linear_schedule':
             print("Using a linear schedule as the controller")
-            controller = DemoScheduler(args, params, rollout, schedule='linear', demo_storage=demo_storage)
+            controller = DemoScheduler(args, params, rollout, schedule='linear',
+                                       demo_storage=demo_storage)
         elif params.demo_controller == 'bandit':
             print('Using Bandit Controller')
-            controller = BanditController(args, params, rollout, demo_storage, demo_buffer, actor_critic)
+            controller = BanditController(args, params, rollout, demo_storage, demo_buffer,
+                                          actor_critic)
         elif params.demo_controller == 'value_loss_schedule':
             print('Using Value Loss Schedule')
-            controller = ValueLossScheduler(args, params, rollout, demo_storage, demo_buffer, actor_critic)
+            controller = ValueLossScheduler(args, params, rollout, demo_storage, demo_buffer,
+                                            actor_critic)
         else:
             raise NotImplementedError
         print("Initialising demonstrator...")
         demo_model = load_model(params, env, device)
         demonstrator = SyntheticDemonstrator(args.demonstrator_path, demo_model, device)
         print("Initialising agent...")
-        agent = load_agent(env, actor_critic, rollout, device, params=params, demo_buffer=demo_buffer)
-        train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params, evaluator,
+        agent = load_agent(env, actor_critic, rollout, device, params=params,
+                           demo_buffer=demo_buffer)
+        train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params,
+              evaluator,
               controller, demo_rollout, demo_buffer, demo_storage, demonstrator)
     elif algo == 'kickstarting':
         print("Initialising agent...")
-        agent = load_agent(env, actor_critic, rollout, device, params, pretrained_policy=pretrained_actor_critic, num_timesteps=args.num_timesteps)
+        agent = load_agent(env, actor_critic, rollout, device, params,
+                           pretrained_policy=pretrained_actor_critic,
+                           num_timesteps=args.num_timesteps)
         train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params,
               evaluator)
     else:
         print("Initialising agent...")
         agent = load_agent(env, actor_critic, rollout, device, params)
-        train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params, evaluator)
+        train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params,
+              evaluator)
 
 
 if __name__ == "__main__":
