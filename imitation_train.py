@@ -66,8 +66,8 @@ def main(args):
     demo_storage = DemoStorage(observation_shape, params.hidden_size, params.num_demos,
                                        params.demo_max_steps, device)
     demo_rollout = DemoRollout(observation_shape, params.hidden_size, params.demo_max_steps, device)
-
-    demonstrator = SyntheticDemonstrator(args.demonstrator_path, actor_critic, device)
+    demo_policy = load_model(params, env, device)
+    demonstrator = SyntheticDemonstrator(args.demonstrator_path, demo_policy, device)
 
     if args.evaluate:
         print("Initialising evaluator...")

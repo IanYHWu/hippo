@@ -6,6 +6,7 @@ from common.model import *
 from common.actor_critic import CategoricalAC
 from agents.ppo import PPO, get_args
 from agents.hippo import HIPPO, get_args_hippo
+from imitation.kickstarting import Kickstarter, get_args_kickstarting
 import yaml
 
 
@@ -83,7 +84,7 @@ def load_model(params, env, device):
     return actor_critic
 
 
-def load_agent(env, actor_critic, storage, device, params, demo_buffer=None):
+def load_agent(env, actor_critic, storage, device, params, demo_buffer=None, num_timesteps=None, pretrained_policy=None):
     """Load an RL Agent"""
     if params.algo == "ppo":
         params_dict = get_args(params)
@@ -91,6 +92,9 @@ def load_agent(env, actor_critic, storage, device, params, demo_buffer=None):
     elif params.algo == 'hippo':
         params_dict = get_args_hippo(params)
         agent = HIPPO(env, actor_critic, storage, demo_buffer, device, **params_dict)
+    elif params.algo == 'kickstarting':
+        params_dict = get_args_kickstarting(params)
+        agent = Kickstarter(env, actor_critic, storage, device, pretrained_policy, num_timesteps, **params_dict)
     else:
         raise NotImplementedError
 
