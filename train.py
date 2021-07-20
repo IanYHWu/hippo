@@ -52,7 +52,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                             reward_filter=params.reward_filter)
         controller.initialise()
 
-    elif params.algo == 'ppo':
+    elif params.algo == 'ppo' or params.algo == 'kickstarting':
         demo = False
         demo_lr_scheduler = None
     else:
@@ -119,7 +119,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                 assert controller.controller_type == "simple_schedule"
                 demo_gather_seeds, _ = controller.get_new_seeds(replace_mode=False)
                 for seed in demo_gather_seeds:
-                    gather_demo(seed, demonstrator, demo_rollout, demo_buffer, params, demo_storage=None,
+                    gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer, params, demo_storage=None,
                                 store_mode=False, reward_filter=params.reward_filter)
 
             # perform a demo-learning step
@@ -227,6 +227,7 @@ def main(args):
     env = load_env(args, params)
 
     print("Initialising model...")
+    pretrained_actor_critic = None
     actor_critic = load_model(params, env, device)
     curr_timestep = 0
     if load_checkpoint:
@@ -235,7 +236,12 @@ def main(args):
         print("Current timestep = {}".format(curr_timestep))
     if pretrained_policy_path:
         print("Loading pre-trained policy: {}".format(pretrained_policy_path))
-        actor_critic = logger.load_policy(actor_critic)
+        pretrained_actor_critic = logger.load_policy(actor_critic)
+        if params.algo != "kickstarting":
+            print("Training from pre-trained policy")
+            actor_critic = pretrained_actor_critic
+        else:
+            print("Training using kickstarting")
 
     observation_shape = env.observation_space.shape
 
@@ -254,6 +260,8 @@ def main(args):
     elif params.algo == 'ppo':
         algo = 'ppo'
         print("Using Agent - Vanilla PPO")
+    elif params.algo == 'kickstarting':
+        algo = 'kickstarting'
     else:
         raise NotImplementedError
 
@@ -288,6 +296,11 @@ def main(args):
         agent = load_agent(env, actor_critic, rollout, device, params=params, demo_buffer=demo_buffer)
         train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params, evaluator,
               controller, demo_rollout, demo_buffer, demo_storage, demonstrator)
+    elif algo == 'kickstarting':
+        print("Initialising agent...")
+        agent = load_agent(env, actor_critic, rollout, device, params, pretrained_policy=pretrained_actor_critic, num_timesteps=args.num_timesteps)
+        train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params,
+              evaluator)
     else:
         print("Initialising agent...")
         agent = load_agent(env, actor_critic, rollout, device, params)
