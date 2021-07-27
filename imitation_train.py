@@ -37,6 +37,8 @@ def train(agent, actor_critic, demo_rollout, demo_storage, demonstrator, evaluat
         # gather demo trajectories by seed and store them
         gather_demo(args, seed, demonstrator, demo_rollout=demo_rollout, params=params, demo_storage=demo_storage, demo_buffer=None,
                     store_mode=True, reward_filter=params.reward_filter)
+        demo_rewards = demo_storage.env_rewards
+        print("Demonstration rewards: {}".format(demo_rewards))
 
     agent.train()
     if args.evaluate:

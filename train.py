@@ -50,7 +50,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
             demo_level_seeds = controller.get_preload_seeds()
             for seed in demo_level_seeds:
                 # gather demo trajectories by seed and store them
-                gather_demo(seed, demonstrator, demo_rollout, demo_buffer, params, demo_storage,
+                gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer, params, demo_storage,
                             store_mode=True,
                             reward_filter=params.reward_filter)
         controller.initialise()
@@ -147,8 +147,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
 
 
 def gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer, params, demo_storage=None,
-                store_mode=False,
-                store_index=None, reward_filter=False):
+                store_mode=False, store_index=None, reward_filter=False):
     """Gather demonstration trajectories by seed"""
     # if the seed is not in the demo storage, or we aren't using demo_storage, get a demo and store it
     tries = 0  # keeps track of how many times this level has been tried
