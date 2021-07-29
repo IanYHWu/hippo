@@ -39,7 +39,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
         demo_storage: storage unit for demonstrations, matching seeds to single demo trajectories
         demonstrator: demonstrator agent
     """
-    if params.algo == 'hippo':
+    if params.algo == 'hippo' or params.algo == 'sil':
         demo = True
         demo_lr_scheduler = DemoLRScheduler(args, params)
 
@@ -266,6 +266,9 @@ def main(args):
     if params.algo == 'hippo':
         algo = 'hippo'
         print("Using Agent - HIPPO")
+    elif params.algo == 'sil':
+        algo = 'sil'
+        print("Using Agent - SIL")
     elif params.algo == 'ppo':
         algo = 'ppo'
         print("Using Agent - Vanilla PPO")
@@ -274,7 +277,7 @@ def main(args):
     else:
         raise NotImplementedError
 
-    if algo == 'hippo':
+    if algo == 'hippo' or algo == 'sil':
         print("Initialising demonstration rollout and buffer...")
         demo_rollout = DemoRollout(observation_shape, params.hidden_size, params.demo_max_steps,
                                    device)

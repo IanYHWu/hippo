@@ -6,6 +6,7 @@ from common.model import *
 from common.actor_critic import CategoricalAC
 from agents.ppo import PPO, get_args
 from agents.hippo import HIPPO, get_args_hippo
+from agents.sil import SIL, get_args_sil
 from imitation.kickstarting import Kickstarter, get_args_kickstarting
 import yaml
 
@@ -92,6 +93,9 @@ def load_agent(env, actor_critic, storage, device, params, demo_buffer=None, num
     elif params.algo == 'hippo':
         params_dict = get_args_hippo(params)
         agent = HIPPO(env, actor_critic, storage, demo_buffer, device, **params_dict)
+    elif params.algo == 'sil':
+        params_dict = get_args_sil(params)
+        agent = SIL(env, actor_critic, storage, demo_buffer, device, **params_dict)
     elif params.algo == 'kickstarting':
         params_dict = get_args_kickstarting(params)
         agent = Kickstarter(env, actor_critic, storage, device, pretrained_policy, num_timesteps, **params_dict)
