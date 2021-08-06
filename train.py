@@ -93,7 +93,11 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
             rew_batch, done_batch = rollout.fetch_log_data()  # fetch rewards and done data from the rollout
             if args.evaluate:
                 # perform testing and log training and testing results
-                eval_rewards, eval_len = evaluator.evaluate(actor_critic)
+                if args.evaluate_policy_demo_kl:
+                    eval_rewards, eval_len = evaluator.evaluate(actor_critic, demonstrator)
+                    evaluator.evaluate_demo_probs(actor_critic, demo_storage, demonstrator)
+                else:
+                    eval_rewards, eval_len = evaluator.evaluate(actor_critic)
                 logger.feed(rew_batch, done_batch, eval_rewards, eval_len)
             else:
                 # log training results
@@ -136,6 +140,11 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
         if demo:
             if args.log_demo_stats:
                 stats_dict = controller.get_stats()
+                if args.evaluate_policy_demo_kl:
+                    stats_dict['env_eval_kl'] = evaluator.env_eval_kl
+                    stats_dict['rel_demo_kl'] = evaluator.rel_demo_kl
+                    stats_dict['env_eval_prob'] = evaluator.env_eval_prob
+                    stats_dict['rel_demo_prob'] = evaluator.rel_demo_prob
                 logger.log_demo_stats(stats_dict)
             controller.update()
             demo_buffer.reset()

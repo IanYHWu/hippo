@@ -59,6 +59,9 @@ parser.add_argument(
 parser.add_argument(
     '--num_test_episodes', type=int, default=10, help='Number of test episodes to perform per evaluation run'
 )
+parser.add_argument(
+    '--evaluate_policy_demo_kl', action='store_true', help='Log KL stats between policy and demonstrator'
+)
 
 # wandb args
 parser.add_argument(

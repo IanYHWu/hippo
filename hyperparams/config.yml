@@ -65,11 +65,11 @@ tiny_hippo_schedule:
     hidden_size: 256
     demo_coef: 0.5
     demo_learning_rate: 0.0005
-    demo_batch_size: 64
-    demo_mini_batch_size: 32
+    demo_batch_size: 16
+    demo_mini_batch_size: 8
     demo_epochs: 10
     demo_controller: linear_schedule
-    demo_learn_ratio: 0.5
+    demo_learn_ratio: 0.1
     demo_entropy_coef: 0.01
     demo_value_coef: 0.005
     demo_max_steps: 18

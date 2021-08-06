@@ -171,7 +171,7 @@ class DemoScheduler(BaseController):
 
     def get_stats(self):
         """Get the latest demo stats"""
-        return self.demo_learn_count
+        return {"demo learning steps": self.demo_learn_count}
 
 
 class BanditController(BaseController):
