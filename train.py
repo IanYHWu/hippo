@@ -6,14 +6,16 @@ from common.loaders import ParamLoader
 from common.data_logging import load_args
 from common.loaders import load_env, load_model, load_agent
 from common.arguments import parser
-from common.utils import set_global_log_levels, set_global_seeds, DemoLRScheduler
+from common.utils import set_global_log_levels, set_global_seeds, DemoLRScheduler, visualise
 from common.data_logging import Logger
 from common.rollout import Rollout
 from common.rollout import DemoRollout
 from common.rollout import DemoBuffer
 from common.rollout import DemoStorage
 from common.controller import DemoScheduler, BanditController, ValueLossScheduler
+from seed_selection import compute_seed_stats
 from test import Evaluator
+from common.loaders import load_seeded_env
 
 from agents.demonstrator import SyntheticDemonstrator
 
@@ -39,6 +41,7 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
         demo_storage: storage unit for demonstrations, matching seeds to single demo trajectories
         demonstrator: demonstrator agent
     """
+    training_seeds = None
     if params.algo == 'hippo' or params.algo == 'sil':
         demo = True
         demo_lr_scheduler = DemoLRScheduler(args, params)
@@ -47,12 +50,35 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
         if params.store_mode and params.pre_load:
             print("Gathering {} Demonstrations".format(params.pre_load))
             # list of seeds to generate hot-start trajectories for
-            demo_level_seeds = controller.get_preload_seeds()
-            for seed in demo_level_seeds:
-                # gather demo trajectories by seed and store them
-                gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer, params, demo_storage,
-                            store_mode=True,
-                            reward_filter=params.reward_filter)
+            if args.filter_demos:
+                num_valid_demos = 0
+                seed = 0
+                training_seeds = []
+                while num_valid_demos < params.pre_load:
+                    valid = gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer, params,
+                                        demo_storage, store_mode=True, reward_filter=params.reward_filter)
+                    if valid:
+                        num_valid_demos += 1
+                        training_seeds.append(seed)
+                    seed += 1
+            else:
+                if params.pre_load_seed_sampling == 'random':
+                    # sample randomly from the training seeds
+                    seeds = np.random.randint(0, args.num_levels, params.pre_load).tolist()
+                elif params.pre_load_seed_sampling == 'fixed':
+                    # sample seeds from 0 to pre_load
+                    if params.pre_load > args.num_levels:
+                        print("Warning: evaluation seeds used for pre-loading")
+                        print("Consider reducing the number of pre-load trajectories")
+                    seeds = [i for i in range(0, params.pre_load)]
+                else:
+                    raise NotImplementedError
+                for seed in seeds:
+                    # gather demo trajectories by seed and store them
+                    gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer, params,
+                                demo_storage,
+                                store_mode=True,
+                                reward_filter=params.reward_filter)
         controller.initialise()
 
     elif params.algo == 'ppo' or params.algo == 'kickstarting':
@@ -65,7 +91,14 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
     # main PPO training loop
     save_every = num_timesteps // params.n_checkpoints
     checkpoint_count = 0
+
+    if args.filter_demos:
+        print("Using seeded environments")
+        env = load_seeded_env(args, params, training_seeds, args.device)
+        print("Training seeds: {}".format(training_seeds))
+
     obs = env.reset()
+
     hidden_state = np.zeros((params.n_envs, rollout.hidden_state_size))
     done = np.zeros(params.n_envs)
     start_ = time.time()
@@ -154,9 +187,11 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
     print("Wall time: {}".format(time.time() - start_))
     env.close()
 
+    print("Seed log: {}".format(rollout.seed_log))
+
 
 def gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer, params, demo_storage=None,
-                store_mode=False, store_index=None, reward_filter=False):
+                store_mode=False, store_index=None, reward_filter=None):
     """Gather demonstration trajectories by seed"""
     # if the seed is not in the demo storage, or we aren't using demo_storage, get a demo and store it
     tries = 0  # keeps track of how many times this level has been tried
@@ -180,9 +215,9 @@ def gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer, params, dem
             demo_obs = demo_next_obs
             demo_hidden_state = demo_next_hidden_state
             step_count += 1
-        final_env_reward = demo_info[0]['env_reward']
+        summed_reward = demo_rollout.get_env_rewards()
         if step_count < params.demo_max_steps:
-            if (not reward_filter) or (reward_filter and final_env_reward > 0):
+            if (reward_filter is None) or (summed_reward > reward_filter):
                 valid = True
         if valid:
             # if the trajectory is valid, compute returns and store it
@@ -201,14 +236,15 @@ def gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer, params, dem
                                   demo_done_t)
             demo_rollout.reset()  # after storing the trajectory, reset the rollout
             demo_env.close()
+            return True
         else:
             # else, reset the env and rollout, and then try again
             demo_rollout.reset()
             demo_env.close()
             tries += 1
-            if tries == 100:
+            if tries == 10:
                 # if this level has yielded 10 bad trajectories, skip it
-                break
+                return False
 
 
 def main(args):
@@ -287,7 +323,17 @@ def main(args):
         raise NotImplementedError
 
     if algo == 'hippo' or algo == 'sil':
+        print("Initialising demonstrator...")
+        demo_model = load_model(params, env, device)
+        demonstrator = SyntheticDemonstrator(args.demonstrator_path, demo_model, device)
+        if args.filter_demos:
+            print("Computing seed statistics...")
+            score_threshold, length_threshold = compute_seed_stats(args, params,
+                                                                   demonstrator=demonstrator)
+            params.demo_max_steps = length_threshold
+            params.reward_filter = score_threshold
         print("Initialising demonstration rollout and buffer...")
+
         demo_rollout = DemoRollout(observation_shape, params.hidden_size, params.demo_max_steps,
                                    device)
         demo_buffer = DemoBuffer(observation_shape, params.hidden_size, params.buffer_max_samples,
@@ -315,9 +361,6 @@ def main(args):
                                             actor_critic)
         else:
             raise NotImplementedError
-        print("Initialising demonstrator...")
-        demo_model = load_model(params, env, device)
-        demonstrator = SyntheticDemonstrator(args.demonstrator_path, demo_model, device)
         print("Initialising agent...")
         agent = load_agent(env, actor_critic, rollout, device, params=params,
                            demo_buffer=demo_buffer)
