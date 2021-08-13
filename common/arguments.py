@@ -81,5 +81,11 @@ parser.add_argument(
 parser.add_argument(
     '--log_demo_stats', action='store_true', help='Log demonstration statistics'
 )
+parser.add_argument(
+    '--filter_demos', action='store_true', help='Filter demonstrations'
+)
+parser.add_argument(
+    '--plot_seed_stats', action='store_true', help='Plot seed statistics'
+)
 
 
