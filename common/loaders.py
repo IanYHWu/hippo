@@ -10,6 +10,8 @@ from agents.sil import SIL, get_args_sil
 from imitation.kickstarting import Kickstarter, get_args_kickstarting
 import yaml
 
+from envs.seeded_procgen import VecPyTorchProcgen
+
 
 def load_env(args, params, eval=False, demo=False, demo_level_seed=None, eval_seed=None):
     """Load the Procgen environment
@@ -53,6 +55,23 @@ def load_env(args, params, eval=False, demo=False, demo_level_seed=None, eval_se
     env = ScaledFloatFrame(env)
 
     return env
+
+
+def load_seeded_env(args, params, seeds, device):
+
+    venv = ProcgenEnv(num_envs=params.n_envs, env_name=args.env_name, \
+        num_levels=args.num_levels, start_level=args.start_level, \
+        distribution_mode=args.distribution_mode)
+    normalize_rew = params.normalise_reward
+    venv = VecExtractDictObs(venv, "rgb")
+    if normalize_rew:
+        venv = VecNormalize(venv, ob=False)
+    # venv = TransposeFrame(venv)
+    venv = ScaledFloatFrame(venv)
+
+    envs = VecPyTorchProcgen(venv, seeds, device)
+
+    return envs
 
 
 def load_model(params, env, device):
@@ -144,10 +163,10 @@ class ParamLoader:
         self.demo_entropy_coef = 0.01
         self.demo_value_coef = 0.005
         self.demo_max_steps = 999  # max acceptable length of demo trajectories
-        self.reward_filter = False
         self.demo_normalise_adv = False  # normalise demo advantages
         self.demo_lr_schedule = False  # learning rate scheduler for demo learning steps
         self.buffer_max_samples = 100  # max capacity of demo buffer
+        self.reward_filter = None
         # schedule controller
         self.pre_load = 0  # pre-loaded demonstrations
         self.pre_load_seed_sampling = 'random'  # determines how we sample seeds for hot start trajectories
