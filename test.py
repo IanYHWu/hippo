@@ -40,7 +40,7 @@ class Evaluator:
                 env_eval_kl = torch.distributions.kl_divergence(dist, demo_dist).mean()
                 env_eval_kl_list.append(env_eval_kl.item())
                 act_prob = demo_dist.probs.reshape(-1)[action]
-                env_eval_prob_list.append(act_prob)
+                env_eval_prob_list.append(act_prob.item())
 
             next_obs, reward, done, info = env.step(action)
             obs = next_obs
@@ -54,6 +54,7 @@ class Evaluator:
                 eps += 1
 
         if demonstrator is not None:
+            print(env_eval_prob_list)
             self.env_eval_kl = np.mean(env_eval_kl_list)
             self.env_eval_prob = np.mean(env_eval_prob_list)
 
@@ -76,7 +77,7 @@ class Evaluator:
                                                 mask_store.float().to(self.device))
                 act_kl = torch.distributions.kl_divergence(policy_dist, demo_dist).mean()
                 act_kl_list.append(act_kl.item())
-                actions = demo_storage.act_store[i, :demo_length].long()
+                actions = demo_storage.act_store[i, :demo_length].long().to(self.device)
                 act_prob = torch.gather(policy_dist.probs, 1, actions.unsqueeze(1)).squeeze(-1).mean()
                 act_prob_list.append(act_prob.item())
 

@@ -27,6 +27,7 @@ class Rollout:
         self.num_envs = num_envs
         self.device = device
         self.reset()
+        self.seed_log = set()
 
     def reset(self):
         """Reset the rollout"""
@@ -147,6 +148,12 @@ class Rollout:
             done_batch = np.array(done_batch)
         else:
             done_batch = self.done_batch.numpy()
+
+        for step in range(self.num_steps):
+            infos = self.info_batch[step]
+            for info in infos:
+                self.seed_log.add(info["level_seed"])
+
         return rew_batch, done_batch
 
 
