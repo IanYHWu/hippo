@@ -34,22 +34,6 @@ class BaseController:
         """Get seeds to sample new demos of"""
         pass
 
-    def get_preload_seeds(self):
-        """Get seeds for pre-loading"""
-        if self.pre_load_seed_sampling == 'random':
-            # sample randomly from the training seeds
-            seeds = np.random.randint(0, self.num_levels, self.pre_load)
-            return seeds.tolist()
-        elif self.pre_load_seed_sampling == 'fixed':
-            # sample seeds from 0 to pre_load
-            if self.pre_load > self.num_levels:
-                print("Warning: evaluation seeds used for pre-loading")
-                print("Consider reducing the number of pre-load trajectories")
-            seeds = [i for i in range(0, self.pre_load)]
-            return seeds
-        else:
-            raise NotImplementedError
-
     def get_learn_indices(self):
         """Get the demo storage indices of demos to learn from"""
         pass
