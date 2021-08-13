@@ -5,6 +5,7 @@ import gym
 import torch.nn as nn
 import torch
 import math
+import matplotlib.pyplot as plt
 
 
 def set_global_log_levels(level):
@@ -95,6 +96,12 @@ class DemoLRScheduler:
             lr = self.schedule[self.i]
             self.i += 1
             return lr
+
+
+def visualise(arr):
+    arr = np.transpose(arr, (1, 2, 0))
+    plt.imshow(arr)
+    plt.show()
 
 
 
