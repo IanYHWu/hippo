@@ -67,7 +67,7 @@ def load_seeded_env(args, params, seeds, device):
     if normalize_rew:
         venv = VecNormalize(venv, ob=False)
     # venv = TransposeFrame(venv)
-    venv = ScaledFloatFrame(venv)
+    # venv = ScaledFloatFrame(venv)
 
     envs = VecPyTorchProcgen(venv, seeds, device)
 
