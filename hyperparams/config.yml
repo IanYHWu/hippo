@@ -74,12 +74,12 @@ tiny_hippo_schedule:
     demo_value_coef: 0.005
     demo_max_steps: 18
     num_learn_demos: 2
-    pre_load: 5
+    pre_load: 2
     pre_load_seed_sampling: fixed
-    demo_levels: 5
-    buffer_max_samples: 5
+    demo_levels: 2
+    buffer_max_samples: 2
     store_mode: True
-    demo_store_max_samples: 5
+    demo_store_max_samples: 2
     replace: 0
     demo_sampling: random
     demo_normalise_adv: False
