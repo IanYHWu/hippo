@@ -71,6 +71,7 @@ class VecPyTorchProcgen(VecEnvWrapper):
         if obs.shape[1] != 3:
             obs = obs.transpose(0, 3, 1, 2)
         # obs = torch.from_numpy(obs).float().to(self.device) / 255.
+        obs = obs / 255.
 
         return obs
 
@@ -99,6 +100,8 @@ class VecPyTorchProcgen(VecEnvWrapper):
             obs = obs.transpose(0, 3, 1, 2)
         # obs = torch.from_numpy(obs).float().to(self.device) / 255.
         # reward = torch.from_numpy(reward).unsqueeze(dim=1).float()
+
+        obs = obs / 255.
 
         return obs, reward, done, info
 
