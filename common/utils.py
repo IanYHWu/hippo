@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch
 import math
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 
 
 def set_global_log_levels(level):
@@ -102,6 +103,28 @@ def visualise(arr):
     arr = np.transpose(arr, (1, 2, 0))
     plt.imshow(arr)
     plt.show()
+
+
+def animate(arr):
+    arr = arr.numpy()
+    fig = plt.figure()
+    i = 0
+    im = plt.imshow(arr[0].transpose((1, 2, 0)), animated=True)
+
+    def update(i):
+        if i < len(arr):
+            i += 1
+        else:
+            i = 0
+        im.set_array(arr[i].transpose((1, 2, 0)))
+        return im,
+
+    a = animation.FuncAnimation(fig, update, blit=True)
+    plt.show()
+
+
+
+
 
 
 
