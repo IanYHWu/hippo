@@ -6,7 +6,7 @@ from common.loaders import ParamLoader
 from common.data_logging import load_args
 from common.loaders import load_env, load_model, load_agent
 from common.arguments import parser
-from common.utils import set_global_log_levels, set_global_seeds, DemoLRScheduler, visualise
+from common.utils import set_global_log_levels, set_global_seeds, DemoLRScheduler, visualise, animate
 from common.data_logging import Logger
 from common.rollout import Rollout
 from common.rollout import DemoRollout
@@ -217,7 +217,7 @@ def gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer, params, dem
             step_count += 1
         summed_reward = demo_rollout.get_env_rewards()
         if step_count < params.demo_max_steps:
-            if (reward_filter is None) or (summed_reward > reward_filter):
+            if (reward_filter is None) or (summed_reward >= reward_filter):
                 valid = True
         if valid:
             # if the trajectory is valid, compute returns and store it
