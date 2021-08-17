@@ -90,7 +90,7 @@ class Kickstarter(PPO):
                                                                         hidden_state_batch,
                                                                         mask_batch)
                 kickstarting_loss = torch.distributions.kl.kl_divergence(
-                    kickstarting_dist_batch, dist_batch).mean()
+                    kickstarting_dist_batch, dist_batch).sum()
 
                 loss = pi_loss + self.value_coef * value_loss - self.entropy_coef * entropy_loss + \
                        kickstarting_coef * kickstarting_loss
