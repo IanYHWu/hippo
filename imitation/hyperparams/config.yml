@@ -1,6 +1,5 @@
 basic:
   num_demos:  10
-  reward_filter: False
   hidden_size: 256
   demo_max_steps: 256
   algo: bc

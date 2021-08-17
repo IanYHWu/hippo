@@ -47,3 +47,10 @@ parser.add_argument(
     '--num_test_episodes', type=int, default=20, help='Number of test episodes to use'
 )
 
+parser.add_argument(
+    '--filter_demos', action="store_true", help="Filter demonstrations by reward"
+)
+
+parser.add_argument(
+    '--plot_seed_stats', action="store_true", help="Plot seed statistics"
+)

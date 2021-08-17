@@ -11,7 +11,7 @@ class ParamLoader:
     def __init__(self, args):
         """Set default values"""
         self.num_demos = 20
-        self.reward_filter = False
+        self.reward_filter = None
         self.hidden_size = 256
         self.demo_max_steps = 999
         self.algo = "bc"
