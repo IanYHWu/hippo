@@ -10,6 +10,7 @@ from agents.demonstrator import SyntheticDemonstrator
 from imitation.bc import BC
 from imitation.arguments import parser
 from test import Evaluator
+from seed_selection import compute_seed_stats
 
 
 def train(agent, actor_critic, demo_rollout, demo_storage, demonstrator, evaluator, params):
@@ -21,24 +22,37 @@ def train(agent, actor_critic, demo_rollout, demo_storage, demonstrator, evaluat
 
     print("Gathering {} Demonstrations".format(params.num_demos))
     # list of seeds to generate hot-start trajectories for
-    if params.demo_seed_sampling == 'random':
-        # sample randomly from the training seeds
-        seeds = np.random.randint(0, args.num_levels, params.num_demos)
-    elif params.demo_seed_sampling == 'fixed':
-        # sample seeds from 0 to pre_load
-        if params.num_demos > args.num_levels:
-            print("Warning: evaluation seeds used for pre-loading")
-            print("Consider reducing the number of pre-load trajectories")
-        seeds = [i for i in range(0, params.num_demos)]
+    if args.filter_demos:
+        num_valid_demos = 0
+        seed = 0
+        training_seeds = []
+        while num_valid_demos < params.num_demos:
+            valid = gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer=None, params=params,
+                                demo_storage=demo_storage, store_mode=True,
+                                reward_filter=params.reward_filter)
+            if valid:
+                num_valid_demos += 1
+                training_seeds.append(seed)
+            seed += 1
+        print("Training seeds: {}".format(training_seeds))
     else:
-        raise NotImplementedError
-
-    for seed in seeds:
-        # gather demo trajectories by seed and store them
-        gather_demo(args, seed, demonstrator, demo_rollout=demo_rollout, params=params, demo_storage=demo_storage, demo_buffer=None,
-                    store_mode=True, reward_filter=params.reward_filter)
-        demo_rewards = demo_storage.env_rewards
-        print("Demonstration rewards: {}".format(demo_rewards))
+        if params.pre_load_seed_sampling == 'random':
+            # sample randomly from the training seeds
+            seeds = np.random.randint(0, args.num_levels, params.pre_load).tolist()
+        elif params.pre_load_seed_sampling == 'fixed':
+            # sample seeds from 0 to pre_load
+            if params.pre_load > args.num_levels:
+                print("Warning: evaluation seeds used for pre-loading")
+                print("Consider reducing the number of pre-load trajectories")
+            seeds = [i for i in range(0, params.pre_load)]
+        else:
+            raise NotImplementedError
+        for seed in seeds:
+            # gather demo trajectories by seed and store them
+            gather_demo(args, seed, demonstrator, demo_rollout, demo_buffer=None, params=params,
+                        demo_storage=demo_storage,
+                        store_mode=True,
+                        reward_filter=params.reward_filter)
 
     agent.train()
     if args.evaluate:
@@ -70,6 +84,13 @@ def main(args):
     demo_rollout = DemoRollout(observation_shape, params.hidden_size, params.demo_max_steps, device)
     demo_policy = load_model(params, env, device)
     demonstrator = SyntheticDemonstrator(args.demonstrator_path, demo_policy, device)
+
+    if args.filter_demos:
+        print("Computing seed statistics...")
+        score_threshold, length_threshold = compute_seed_stats(args, params,
+                                                               demonstrator=demonstrator)
+        params.demo_max_steps = length_threshold
+        params.reward_filter = score_threshold
 
     if args.evaluate:
         print("Initialising evaluator...")
