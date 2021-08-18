@@ -4,19 +4,18 @@ from torch import optim
 import numpy as np
 
 
-class BC:
+class BCPretrainer:
 
-    def __init__(self, actor_critic, demo_storage, epochs, mini_batch_size, learning_rate,
-                 l2_coef, entropy_coef, device):
+    def __init__(self, actor_critic, demo_storage, params, device):
         self.actor_critic = actor_critic
         self.demo_storage = demo_storage
-        self.epochs = epochs
-        self.mini_batch_size = mini_batch_size
-        self.learning_rate = learning_rate
-        self.l2_coef = l2_coef
-        self.entropy_coef = entropy_coef
+        self.epochs = params.pretrain_epochs
+        self.mini_batch_size = params.pretrain_mini_batch_size
+        self.learning_rate = params.pretrain_learning_rate
+        self.l2_coef = params.pretrain_l2_coef
+        self.entropy_coef = params.pretrain_entropy_coef
         self.device = device
-        self.optimizer = optim.Adam(self.actor_critic.parameters(), lr=learning_rate, eps=1e-5)
+        self.optimizer = optim.Adam(self.actor_critic.parameters(), lr=params.pretrain_learning_rate, eps=1e-5)
         self.batch_size = demo_storage.get_n_valid_transitions()
 
     def batch_generator(self):
