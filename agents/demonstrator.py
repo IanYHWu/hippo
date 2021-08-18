@@ -36,3 +36,4 @@ class SyntheticDemonstrator:
         # checkpoint = torch.load(self.path)
         model.load_state_dict(checkpoint['model_state_dict'])
         self.demonstrator = model
+
