@@ -4,7 +4,7 @@ import time
 
 from common.loaders import ParamLoader
 from common.data_logging import load_args
-from common.loaders import load_env, load_model, load_agent
+from common.loaders import load_env, load_model, load_agent, load_pretraining_agent
 from common.arguments import parser
 from common.utils import set_global_log_levels, set_global_seeds, DemoLRScheduler, visualise, animate
 from common.data_logging import Logger
@@ -16,14 +16,13 @@ from common.controller import DemoScheduler, BanditController, ValueLossSchedule
 from seed_selection import compute_seed_stats
 from test import Evaluator
 from common.loaders import load_seeded_env
-
 from agents.demonstrator import SyntheticDemonstrator
 
 
 def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params,
           evaluator=None,
           controller=None, demo_rollout=None, demo_buffer=None, demo_storage=None,
-          demonstrator=None):
+          demonstrator=None, pretraining_agent=None):
     """
     Train the RL agent, representing the main training loop
         agent: RL agent
@@ -45,7 +44,12 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
     if params.algo == 'hippo' or params.algo == 'sil':
         demo = True
         demo_lr_scheduler = DemoLRScheduler(args, params)
+    else:
+        demo = False
+        demo_lr_scheduler = None
 
+    if params.algo == 'hippo' or params.algo == 'sil' or \
+            params.algo == 'kickstarting' or params.algo == 'bc':
         # if hot start, load hot start trajectories into the buffer
         if params.store_mode and params.pre_load:
             print("Gathering {} Demonstrations".format(params.pre_load))
@@ -79,13 +83,14 @@ def train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timestep
                                 demo_storage,
                                 store_mode=True,
                                 reward_filter=params.reward_filter)
-        controller.initialise()
-
-    elif params.algo == 'ppo' or params.algo == 'kickstarting':
-        demo = False
-        demo_lr_scheduler = None
+        if demo:
+            controller.initialise()
     else:
         raise NotImplementedError
+
+    if params.algo == "bc" or params.algo == "kickstarting":
+        print("Performing Supervised Pretraining")
+        pretraining_agent.train()
 
     print("Now training...")
     # main PPO training loop
@@ -281,21 +286,12 @@ def main(args):
     env = load_env(args, params)
 
     print("Initialising model...")
-    pretrained_actor_critic = load_model(params, env, device)
     actor_critic = load_model(params, env, device)
     curr_timestep = 0
     if load_checkpoint:
         print("Loading checkpoint: {}".format(args.log_dir + '/' + args.name))
         actor_critic, curr_timestep = logger.load_checkpoint(actor_critic)
         print("Current timestep = {}".format(curr_timestep))
-    if pretrained_policy_path:
-        print("Loading pre-trained policy: {}".format(pretrained_policy_path))
-        pretrained_actor_critic = logger.load_policy(pretrained_actor_critic)
-        if params.algo != "kickstarting":
-            print("Training from pre-trained policy")
-            actor_critic = pretrained_actor_critic
-        else:
-            print("Training using kickstarting")
 
     observation_shape = env.observation_space.shape
 
@@ -319,10 +315,14 @@ def main(args):
         print("Using Agent - Vanilla PPO")
     elif params.algo == 'kickstarting':
         algo = 'kickstarting'
+        print("Using Agent - BC Pretraining and Kickstarting")
+    elif params.algo == 'bc':
+        algo = 'bc'
+        print("Using Agent - BC Pretraining and PPO")
     else:
         raise NotImplementedError
 
-    if algo == 'hippo' or algo == 'sil':
+    if algo == 'hippo' or algo == 'sil' or algo == 'kickstarting' or algo == 'bc':
         print("Initialising demonstrator...")
         demo_model = load_model(params, env, device)
         demonstrator = SyntheticDemonstrator(args.demonstrator_path, demo_model, device)
@@ -333,7 +333,6 @@ def main(args):
             params.demo_max_steps = length_threshold
             params.reward_filter = score_threshold
         print("Initialising demonstration rollout and buffer...")
-
         demo_rollout = DemoRollout(observation_shape, params.hidden_size, params.demo_max_steps,
                                    device)
         demo_buffer = DemoBuffer(observation_shape, params.hidden_size, params.buffer_max_samples,
@@ -346,34 +345,46 @@ def main(args):
         else:
             demo_storage = None
 
-        print("Initialising controller...")
-        if params.demo_controller == 'linear_schedule':
-            print("Using a linear schedule as the controller")
-            controller = DemoScheduler(args, params, rollout, schedule='linear',
-                                       demo_storage=demo_storage)
-        elif params.demo_controller == 'bandit':
-            print('Using Bandit Controller')
-            controller = BanditController(args, params, rollout, demo_storage, demo_buffer,
-                                          actor_critic)
-        elif params.demo_controller == 'value_loss_schedule':
-            print('Using Value Loss Schedule')
-            controller = ValueLossScheduler(args, params, rollout, demo_storage, demo_buffer,
-                                            actor_critic)
+        if algo == 'hippo' or algo == 'sil':
+            pretraining_agent = None
+            print("Initialising controller...")
+            if params.demo_controller == 'linear_schedule':
+                print("Using a linear schedule as the controller")
+                controller = DemoScheduler(args, params, rollout, schedule='linear',
+                                           demo_storage=demo_storage)
+            elif params.demo_controller == 'bandit':
+                print('Using Bandit Controller')
+                controller = BanditController(args, params, rollout, demo_storage, demo_buffer,
+                                              actor_critic)
+            elif params.demo_controller == 'value_loss_schedule':
+                print('Using Value Loss Schedule')
+                controller = ValueLossScheduler(args, params, rollout, demo_storage, demo_buffer,
+                                                actor_critic)
+            else:
+                raise NotImplementedError
+
+        elif algo == 'kickstarting' or algo == 'bc':
+            print("Initialising pretraining agent...")
+            pretraining_agent = load_pretraining_agent(actor_critic, demo_storage, params, device)
+            print("Initialising agent...")
+            controller = None
+
         else:
             raise NotImplementedError
-        print("Initialising agent...")
-        agent = load_agent(env, actor_critic, rollout, device, params=params,
-                           demo_buffer=demo_buffer)
+
+        if algo == "kickstarting":
+            fresh_actor_critic = load_model(params, env, device)
+            agent = load_agent(env, fresh_actor_critic, rollout, device, params=params,
+                               demo_buffer=demo_buffer, num_timesteps=args.num_timesteps,
+                               pretrained_policy=actor_critic)
+        else:
+            agent = load_agent(env, actor_critic, rollout, device, params=params,
+                               demo_buffer=demo_buffer)
+
         train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params,
-              evaluator,
-              controller, demo_rollout, demo_buffer, demo_storage, demonstrator)
-    elif algo == 'kickstarting':
-        print("Initialising agent...")
-        agent = load_agent(env, actor_critic, rollout, device, params,
-                           pretrained_policy=pretrained_actor_critic,
-                           num_timesteps=args.num_timesteps)
-        train(agent, actor_critic, env, rollout, logger, curr_timestep, num_timesteps, params,
-              evaluator)
+              evaluator, controller, demo_rollout, demo_buffer, demo_storage, demonstrator,
+              pretraining_agent=pretraining_agent)
+
     else:
         print("Initialising agent...")
         agent = load_agent(env, actor_critic, rollout, device, params)
