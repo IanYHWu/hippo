@@ -8,6 +8,7 @@ from agents.ppo import PPO, get_args
 from agents.hippo import HIPPO, get_args_hippo
 from agents.sil import SIL, get_args_sil
 from imitation.kickstarting import Kickstarter, get_args_kickstarting
+from imitation.bc_pretrainer import BCPretrainer
 import yaml
 
 from envs.seeded_procgen import VecPyTorchProcgen
@@ -106,7 +107,7 @@ def load_model(params, env, device):
 
 def load_agent(env, actor_critic, storage, device, params, demo_buffer=None, num_timesteps=None, pretrained_policy=None):
     """Load an RL Agent"""
-    if params.algo == "ppo":
+    if params.algo == "ppo" or params.algo == "bc":
         params_dict = get_args(params)
         agent = PPO(env, actor_critic, storage, device, **params_dict)
     elif params.algo == 'hippo':
@@ -120,6 +121,12 @@ def load_agent(env, actor_critic, storage, device, params, demo_buffer=None, num
         agent = Kickstarter(env, actor_critic, storage, device, pretrained_policy, num_timesteps, **params_dict)
     else:
         raise NotImplementedError
+
+    return agent
+
+
+def load_pretraining_agent(actor_critic, demo_storage, params, device):
+    agent = BCPretrainer(actor_critic, demo_storage, params, device)
 
     return agent
 
@@ -188,6 +195,12 @@ class ParamLoader:
         self.mu = 0.5  # demo score scaling - downweights the demo feedback
         self.eta = 0  # weighting of environment val losses relative to demo val losses when computing val loss score
         self.nu = 1  # priortised sampling weighting
+        # pretraining
+        self.pretrain_epochs = 10
+        self.pretrain_mini_batch_size = 512
+        self.pretrain_learning_rate = 0.0005
+        self.pretrain_l2_coef = 0.001
+        self.pretrain_entropy_coef = 0.001
 
         # read in yaml config file and overwrite the appropriate defaults
         with open('hyperparams/config.yml', 'r') as f:
