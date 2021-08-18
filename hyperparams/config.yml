@@ -224,6 +224,36 @@ tiny_sil:
     demo_normalise_adv: False
     demo_lr_schedule: False
 
+tiny_bc:
+    n_envs: 2
+    n_steps: 16
+    n_checkpoints: 2
+    epoch: 3
+    mini_batch_per_epoch: 4
+    mini_batch_size: 512
+    gamma: 0.999
+    lmbda: 0.95
+    learning_rate: 0.0005
+    grad_clip_norm: 0.5
+    eps_clip: 0.2
+    value_coef: 0.5
+    entropy_coef: 0.01
+    normalise_adv: True
+    normalise_reward: True
+    use_gae: True
+    algo: bc
+    architecture: ResNet
+    recurrent: False
+    hidden_size: 256
+    num_learn_demos: 5
+    pre_load: 5
+    demo_levels: 5
+    store_mode: True
+    demo_store_max_samples: 5
+    replace: 0
+    pretrain_mini_batch_size: 128
+
+
 tiny_kickstarting:
     n_envs: 2
     n_steps: 16
@@ -245,6 +275,13 @@ tiny_kickstarting:
     architecture: ResNet
     recurrent: False
     hidden_size: 256
+    num_learn_demos: 5
+    pre_load: 5
+    demo_levels: 5
+    store_mode: True
+    demo_store_max_samples: 5
+    replace: 0
+    pretrain_mini_batch_size: 128
 
 main_hippo_val_schedule:
     n_envs: 64
