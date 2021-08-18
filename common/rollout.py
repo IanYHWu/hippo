@@ -132,7 +132,6 @@ class Rollout:
 
     def fetch_log_data(self):
         """Extract rewards from info - to be sent to the logger"""
-        print(self.rew_batch)
         if 'env_reward' in self.info_batch[0][0]:
             rew_batch = []
             for step in range(self.num_steps):
