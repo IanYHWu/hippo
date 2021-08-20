@@ -45,7 +45,7 @@ class Kickstarter(PPO):
     def get_kickstarting_coef(self):
         timesteps_per_step = (self.n_envs * self.n_steps) * self.train_steps
         self.train_steps += 1
-        return 1 - (timesteps_per_step / self.num_timesteps)
+        return 0.1 * (1 - (timesteps_per_step / self.num_timesteps))
 
     def optimize(self):
         pi_loss_list, value_loss_list, entropy_loss_list, kickstarting_loss_list = [], [], [], []
@@ -58,6 +58,7 @@ class Kickstarter(PPO):
         kickstarting_coef = self.get_kickstarting_coef()
 
         self.actor_critic.train()
+        self.pre_trained_policy.eval()
         for e in range(self.epoch):
             recurrent = self.actor_critic.is_recurrent()
             generator = self.storage.fetch_train_generator(mini_batch_size=self.mini_batch_size,
@@ -89,8 +90,10 @@ class Kickstarter(PPO):
                 kickstarting_dist_batch, _, _ = self.pre_trained_policy(obs_batch,
                                                                         hidden_state_batch,
                                                                         mask_batch)
-                kickstarting_loss = torch.distributions.kl.kl_divergence(
-                    kickstarting_dist_batch, dist_batch).sum()
+                print("kickstart dist batch: {}".format(kickstarting_dist_batch))
+                print("ce: {}".format(cross_entropy(kickstarting_dist_batch, dist_batch)))
+                kickstarting_loss = cross_entropy(kickstarting_dist_batch, dist_batch).mean()
+                print("kickstarting loss: {}".format(kickstarting_loss))
 
                 loss = pi_loss + self.value_coef * value_loss - self.entropy_coef * entropy_loss + \
                        kickstarting_coef * kickstarting_loss
@@ -112,6 +115,8 @@ class Kickstarter(PPO):
                    'Loss/entropy': np.mean(entropy_loss_list),
                    'Loss/kickstarting': np.mean(kickstarting_loss_list)}
 
+        print(summary)
+
         return summary
 
 
@@ -129,3 +134,11 @@ def get_args_kickstarting(params):
                   'entropy_coef': params.entropy_coef}
 
     return param_dict
+
+
+def cross_entropy(p, q):
+    p = p.probs
+    q = q.probs
+    print("p: {}".format(p))
+    print("q: {}".format(q))
+    return -torch.sum(p * torch.log(q), dim=1)
