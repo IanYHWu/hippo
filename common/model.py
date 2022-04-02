@@ -1,3 +1,10 @@
+"""
+This module implements the CNNs used in our RL algorithms. Implements three main CNN classes:
+    MLP: a standard MLP
+    ResNet: ResNet CNN, standard choice
+    SmallNet: A small variant
+"""
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -18,7 +25,7 @@ init_tanh_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
 
 def apply_init_(modules):
     """
-    Initialize NN modules
+    Initialise NN modules
     """
     for m in modules:
         if isinstance(m, nn.Conv2d):
@@ -47,7 +54,7 @@ class DeviceAwareModule(nn.Module):
 
 class Conv2d_tf(nn.Conv2d):
     """
-    Conv2d with the padding behavior from TF
+    Conv2d with the padding behavior from TF. Used for the ResNet implementation
     """
 
     def __init__(self, *args, **kwargs):
@@ -250,7 +257,7 @@ class BasicBlock(nn.Module):
 
 class ResNetBase(NNBase):
     """
-    Residual Network
+    Residual Network, ResNet variant. Our standard CNN class
     """
 
     def __init__(self, num_inputs, input_h=64, input_w=64, recurrent=False, hidden_size=256, channels=[16, 32, 32]):
@@ -304,7 +311,7 @@ class ResNetBase(NNBase):
 
 class SmallNetBase(NNBase):
     """
-    Residual Network
+    Residual Network, small variant
     """
 
     def __init__(self, num_inputs, input_h=64, input_w=64, recurrent=False, hidden_size=256):

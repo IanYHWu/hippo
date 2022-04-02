@@ -1,12 +1,10 @@
-"""Module for the HIPPO agent"""
-
 from agents.ppo import PPO
 import torch
 import torch.optim as optim
 import numpy as np
 
 
-class HIPPO(PPO):
+class SIL(PPO):
 
     def __init__(self,
                  env,
@@ -66,7 +64,7 @@ class HIPPO(PPO):
 
     def demo_optimize(self, lr_schedule):
         """Learn from samples in the the demonstrations replay buffer"""
-        pi_loss_list, value_loss_list, entropy_loss_list = [], [], []
+        pol_loss_list, val_loss_list = [], []
         n_valid_transitions = self.demo_buffer.get_n_valid_transitions()
         batch_size = self.demo_batch_size
         # the batch size must be <= than the number of non-padding transitions in the trajectory
@@ -103,22 +101,20 @@ class HIPPO(PPO):
 
                 # Clipped Surrogate Objective
                 log_prob_act_batch = dist_batch.log_prob(act_batch)
-                ratio = torch.exp(log_prob_act_batch - old_log_prob_act_batch)
-                surr1 = ratio * adv_batch
-                surr2 = torch.clamp(ratio, 1.0 - self.eps_clip, 1.0 + self.eps_clip) * adv_batch
-                pi_loss = -torch.min(surr1, surr2).mean()
+                pol_loss = -log_prob_act_batch * torch.clamp(return_batch - value_batch,
+                                                             min=0)
+                pol_loss = pol_loss.mean()
 
-                # Clipped Bellman-Error
-                clipped_value_batch = old_value_batch + (value_batch - old_value_batch).clamp(-self.eps_clip,
-                                                                                              self.eps_clip)
-                v_surr1 = (value_batch - return_batch).pow(2)
-                v_surr2 = (clipped_value_batch - return_batch).pow(2)
-                value_loss = 0.5 * torch.max(v_surr1, v_surr2).mean()
+                val_loss = 0.5 * (torch.clamp(return_batch - value_batch, min=0)).pow(2)
+                val_loss = val_loss.mean()
 
-                # actor_critic Entropy
-                entropy_loss = dist_batch.entropy().mean()
-                loss = pi_loss + self.demo_value_coef * value_loss - self.demo_entropy_coef * entropy_loss
+                loss = pol_loss + self.demo_value_coef * val_loss
                 loss.backward()
+
+                demo_optimizer.step()
+                demo_optimizer.zero_grad()
+                val_loss_list.append(val_loss.item())
+                pol_loss_list.append(pol_loss.item())
 
                 # accumulate gradients before performing gradient descent
                 if grad_accumulation_count % grad_accumulation_steps == 0:
@@ -126,19 +122,17 @@ class HIPPO(PPO):
                     demo_optimizer.step()
                     demo_optimizer.zero_grad()
                 grad_accumulation_count += 1
-                pi_loss_list.append(pi_loss.item())
-                value_loss_list.append(value_loss.item())
-                entropy_loss_list.append(entropy_loss.item())
+                pol_loss_list.append(pol_loss.item())
+                val_loss_list.append(val_loss.item())
 
-        summary = {'Loss/pi': np.mean(pi_loss_list),
-                   'Loss/v': np.mean(value_loss_list),
-                   'Loss/entropy': np.mean(entropy_loss_list)}
+        summary = {'Loss/pi': np.mean(pol_loss_list),
+                   'Loss/v': np.mean(val_loss_list)}
 
         return summary
 
 
-def get_args_hippo(params):
-    """Extract arguments relevant to HIPPO"""
+def get_args_sil(params):
+    """Extract arguments relevant to SIL"""
     param_dict = {'n_steps': params.n_steps,
                   'n_envs': params.n_envs,
                   'epoch': params.epoch,

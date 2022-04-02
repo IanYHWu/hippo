@@ -1,5 +1,6 @@
+"""Module to construct an actor critic"""
+
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.distributions import Categorical
 from common.utils import init
 
@@ -7,8 +8,9 @@ from common.utils import init
 class CategoricalAC(nn.Module):
     def __init__(self, base, recurrent, num_actions):
         """
-        embedder: (torch.Tensor) model to extract the embedding for observation - probably a ConvNet
-        action_size: number of the categorical actions
+        base: base CNN
+        recurrent: Flag for recurrence
+        num_actions: size of the action space
         """
         super().__init__()
         self.base = base
@@ -20,7 +22,7 @@ class CategoricalAC(nn.Module):
 
     def forward(self, x, hx, masks):
         value, actor_features, rnn_hxs = self.base(x, hx, masks)
-        dist = self.dist(actor_features)
+        dist = self.dist(actor_features)  # pass actor features through a categorical distribution to get probabilities
         value = value.reshape(-1)
 
         return dist, value, rnn_hxs

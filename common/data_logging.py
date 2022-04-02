@@ -1,3 +1,5 @@
+"""Module to manage data logging - reading and writing data to and from the diisk"""
+
 import numpy as np
 import pandas as pd
 from collections import deque
@@ -6,11 +8,30 @@ import time
 import os
 import torch
 import json
-import yaml
 import wandb
 
 
 class Logger:
+    """Logging object
+
+    Attributes:
+        params: ParamLoader object
+        args: argparse object
+        root: root location
+        name: experiment name
+        root_path: root folder path
+        checkpoint_path: checkpoint folder path
+        log_path: log file (csv) path
+        demo_log_path: demo log file (csv) path
+        n_envs: number of envs
+        episode_rewards: list of rewards for each trajectory
+        episode_len_buffer: trajectory length buffer
+        episode_reward_buffer: trajectory reward buffer
+        eval_rewards: evaluation trajectory rewards list
+        eval_lens: evaluation trajectory length list
+        curr_timestep: current global timestep
+        num_episodes: total number of episodes seen
+    """
 
     def __init__(self, args, params, log_wandb=False):
         self.start_time = time.time()
@@ -20,6 +41,7 @@ class Logger:
         self.name = self.args.name
         self.root_path = None
         self.checkpoint_path = None
+        self.pretrained_policy_path = self.args.pretrained_policy_path
         self.log_path = None
         self.demo_log_path = None
         self.n_envs = params.n_envs
@@ -43,10 +65,12 @@ class Logger:
             self._initialise_wandb()
 
     def _eval_reset(self):
+        """Reset the evaluation stores"""
         self.eval_rewards = []
         self.eval_lens = []
 
     def _make_dirs(self):
+        """Create the relevant directories"""
         root_path = self.root + '/' + self.name
         if not os.path.isdir(root_path):
             os.makedirs(root_path)
@@ -59,6 +83,7 @@ class Logger:
         self.demo_log_path = self.root_path + '/' + self.name + '_demos.csv'
 
     def save_checkpoint(self, model, curr_timestep):
+        """Save the current policy as a checkpoint"""
         torch.save({
             'model_state_dict': model.state_dict(),
             'curr_timestep': curr_timestep,
@@ -68,10 +93,12 @@ class Logger:
         }, self.checkpoint_path)
 
     def save_args(self):
+        """Save the current argparse arguments as a json file - useful for checkpointing"""
         with open(self.root_path + '/input_args.txt', 'w') as f:
             json.dump(self.args.__dict__, f, indent=2)
 
     def load_checkpoint(self, model):
+        """Load a checkpoint policy"""
         checkpoint = torch.load(self.checkpoint_path)
         model.load_state_dict(checkpoint['model_state_dict'])
         curr_timestep = checkpoint['curr_timestep']
@@ -86,7 +113,15 @@ class Logger:
 
         return model, curr_timestep
 
+    def load_policy(self, model):
+        """Load a pre-trained policy"""
+        checkpoint = torch.load(self.pretrained_policy_path)
+        model.load_state_dict(checkpoint['model_state_dict'])
+
+        return model
+
     def feed(self, rew_batch, done_batch, eval_reward=None, eval_len=None):
+        """Feed data from the rollout buffer into the logger object"""
         steps = rew_batch.shape[0]
         rew_batch = rew_batch.T
         done_batch = done_batch.T
@@ -104,18 +139,21 @@ class Logger:
         self.curr_timestep += (self.n_envs * steps)
 
     def _check_log_exists(self):
+        """Check if the data log has been created"""
         if os.path.isfile(self.log_path):
             return True
         else:
             return False
 
     def _check_demo_log_exists(self):
+        """Check if the demo data log has been created"""
         if os.path.isfile(self.demo_log_path):
             return True
         else:
             return False
 
     def log_results(self):
+        """Log the results into a csv file"""
         wall_time = time.time() - self.start_time
         if self.num_episodes > 0:
             episode_statistics = self._get_episode_statistics()
@@ -129,10 +167,11 @@ class Logger:
         results = [self.curr_timestep] + [wall_time] + [self.num_episodes] + episode_statistics_list
         if self._check_log_exists():
             df = pd.read_csv(self.log_path, index_col=0)
-            df = df[df.timesteps != self.curr_timestep]
+            df = df[df.timesteps != self.curr_timestep]  # overwrite timesteps - used for checkpoint runs
             df.loc[len(df)] = np.array(results)
             df.to_csv(self.log_path)
         else:
+            # create the log file if it doesn't exist
             if self.args.evaluate:
                 df = pd.DataFrame(np.array([results]),
                                   columns=['timesteps', 'wall_time', 'num_train_episodes',
@@ -163,6 +202,7 @@ class Logger:
         self._eval_reset()
 
     def _get_episode_statistics(self):
+        """Compute the episode statistics"""
         if self.args.evaluate:
             episode_statistics = {'Train Rewards/max_episodes': np.max(self.episode_reward_buffer),
                                   'Train Rewards/mean_episodes': np.mean(self.episode_reward_buffer),
@@ -182,25 +222,27 @@ class Logger:
 
         return episode_statistics
 
-    def log_demo_stats(self, num_queries, num_learn, score):
-        results = [self.curr_timestep] + [num_queries] + [num_learn] + [score]
+    def log_demo_stats(self, stats_dict):
+        """Log the demonstration statistics - used with certain controllers"""
+        col_headers = ['timestep'] + [key for key in stats_dict.keys()]
+        col_results = [val for val in stats_dict.values()]
+        results = [self.curr_timestep] + col_results
         if self._check_demo_log_exists():
             df = pd.read_csv(self.demo_log_path, index_col=0)
-            df = df[df.timesteps != self.curr_timestep]
+            df = df[df.timestep != self.curr_timestep]  # overwrite existing timesteps
             df.loc[len(df)] = np.array(results)
             df.to_csv(self.demo_log_path)
         else:
             df = pd.DataFrame(np.array([results]),
-                              columns=['timesteps', 'num_queries', 'num_learn', 'score'])
+                              columns=col_headers)
             df.to_csv(self.demo_log_path)
 
         if self.log_wandb:
-            wandb.log({'timesteps': self.curr_timestep,
-                       'num_queries': num_queries,
-                       'num_learn': num_learn,
-                       'score': score})
+            wandb_dict = {**{'timesteps': self.curr_timestep}, **stats_dict}
+            wandb.log(wandb_dict)
 
     def _initialise_wandb(self):
+        """Initialise wandb"""
         if self.args.load_checkpoint:
             wandb_id = self.params.wandb_id
             wandb.init(project=self.args.wandb_project_name, name=self.args.wandb_name, resume="must", id=wandb_id)
@@ -214,6 +256,7 @@ class Logger:
 
 
 def load_args(root_path):
+    """Load the arguments from a json file - used for checkpointing"""
     args = parser.parse_args()
     print(args)
     with open(root_path + '/input_args.txt', 'r') as f:

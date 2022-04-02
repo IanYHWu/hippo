@@ -13,6 +13,9 @@ parser.add_argument(
     '--load_checkpoint', action='store_true', help='Continue training from a checkpoint'
 )
 parser.add_argument(
+    '--pretrained_policy_path', type=str, default=None, help='Path to pre-trained policy'
+)
+parser.add_argument(
     '--log_dir', type=str, default='..', help='Logging directory'
 )
 parser.add_argument(
@@ -56,6 +59,9 @@ parser.add_argument(
 parser.add_argument(
     '--num_test_episodes', type=int, default=10, help='Number of test episodes to perform per evaluation run'
 )
+parser.add_argument(
+    '--evaluate_policy_demo_kl', action='store_true', help='Log KL stats between policy and demonstrator'
+)
 
 # wandb args
 parser.add_argument(
@@ -70,10 +76,16 @@ parser.add_argument(
 
 # ppo_demo args
 parser.add_argument(
-    '--oracle_path', type=str, default='', help='Path to synthetic oracle'
+    '--demonstrator_path', type=str, default='', help='Path to synthetic demonstrator'
 )
 parser.add_argument(
     '--log_demo_stats', action='store_true', help='Log demonstration statistics'
+)
+parser.add_argument(
+    '--filter_demos', action='store_true', help='Filter demonstrations'
+)
+parser.add_argument(
+    '--plot_seed_stats', action='store_true', help='Plot seed statistics'
 )
 
 
