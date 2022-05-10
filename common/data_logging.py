@@ -22,7 +22,6 @@ class Logger:
         root_path: root folder path
         checkpoint_path: checkpoint folder path
         log_path: log file (csv) path
-        demo_log_path: demo log file (csv) path
         n_envs: number of envs
         episode_rewards: list of rewards for each trajectory
         episode_len_buffer: trajectory length buffer
@@ -41,9 +40,7 @@ class Logger:
         self.name = self.args.name
         self.root_path = None
         self.checkpoint_path = None
-        self.pretrained_policy_path = self.args.pretrained_policy_path
         self.log_path = None
-        self.demo_log_path = None
         self.n_envs = params.n_envs
         self.log_wandb = log_wandb
 
@@ -55,12 +52,10 @@ class Logger:
 
         self.eval_rewards = []
         self.eval_lens = []
-
         self.curr_timestep = 0
         self.num_episodes = 0
 
         self._make_dirs()
-
         if self.log_wandb:
             self._initialise_wandb()
 
@@ -80,7 +75,6 @@ class Logger:
         self.root_path = root_path
         self.checkpoint_path = checkpoint_path + '/checkpoint'
         self.log_path = self.root_path + '/' + self.name + '.csv'
-        self.demo_log_path = self.root_path + '/' + self.name + '_demos.csv'
 
     def save_checkpoint(self, model, curr_timestep):
         """Save the current policy as a checkpoint"""
@@ -113,13 +107,6 @@ class Logger:
 
         return model, curr_timestep
 
-    def load_policy(self, model):
-        """Load a pre-trained policy"""
-        checkpoint = torch.load(self.pretrained_policy_path)
-        model.load_state_dict(checkpoint['model_state_dict'])
-
-        return model
-
     def feed(self, rew_batch, done_batch, eval_reward=None, eval_len=None):
         """Feed data from the rollout buffer into the logger object"""
         steps = rew_batch.shape[0]
@@ -145,13 +132,6 @@ class Logger:
         else:
             return False
 
-    def _check_demo_log_exists(self):
-        """Check if the demo data log has been created"""
-        if os.path.isfile(self.demo_log_path):
-            return True
-        else:
-            return False
-
     def log_results(self):
         """Log the results into a csv file"""
         wall_time = time.time() - self.start_time
@@ -167,7 +147,7 @@ class Logger:
         results = [self.curr_timestep] + [wall_time] + [self.num_episodes] + episode_statistics_list
         if self._check_log_exists():
             df = pd.read_csv(self.log_path, index_col=0)
-            df = df[df.timesteps != self.curr_timestep]  # overwrite timesteps - used for checkpoint runs
+            df = df[df.timesteps != self.curr_timestep]  # overwrite timesteps
             df.loc[len(df)] = np.array(results)
             df.to_csv(self.log_path)
         else:
@@ -184,7 +164,8 @@ class Logger:
                                   columns=['timesteps', 'wall_time', 'num_train_episodes',
                                            'train_max_episode_rewards', 'train_mean_episode_rewards',
                                            'train_min_episode_rewards',
-                                           'train_max_episode_len', 'train_mean_episode_len', 'train_min_episode_len'])
+                                           'train_max_episode_len', 'train_mean_episode_len',
+                                           'train_min_episode_len'])
             df.to_csv(self.log_path)
 
         if self.log_wandb:
@@ -222,30 +203,12 @@ class Logger:
 
         return episode_statistics
 
-    def log_demo_stats(self, stats_dict):
-        """Log the demonstration statistics - used with certain controllers"""
-        col_headers = ['timestep'] + [key for key in stats_dict.keys()]
-        col_results = [val for val in stats_dict.values()]
-        results = [self.curr_timestep] + col_results
-        if self._check_demo_log_exists():
-            df = pd.read_csv(self.demo_log_path, index_col=0)
-            df = df[df.timestep != self.curr_timestep]  # overwrite existing timesteps
-            df.loc[len(df)] = np.array(results)
-            df.to_csv(self.demo_log_path)
-        else:
-            df = pd.DataFrame(np.array([results]),
-                              columns=col_headers)
-            df.to_csv(self.demo_log_path)
-
-        if self.log_wandb:
-            wandb_dict = {**{'timesteps': self.curr_timestep}, **stats_dict}
-            wandb.log(wandb_dict)
-
     def _initialise_wandb(self):
         """Initialise wandb"""
         if self.args.load_checkpoint:
             wandb_id = self.params.wandb_id
-            wandb.init(project=self.args.wandb_project_name, name=self.args.wandb_name, resume="must", id=wandb_id)
+            wandb.init(project=self.args.wandb_project_name, name=self.args.wandb_name,
+                       resume="must", id=wandb_id)
         else:
             wandb.init(project=self.args.wandb_project_name, name=self.args.wandb_name,
                        settings=wandb.Settings(start_method='fork'))

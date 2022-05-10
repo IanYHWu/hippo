@@ -4,7 +4,6 @@ import numpy as np
 import gym
 import torch.nn as nn
 import torch
-import math
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
@@ -60,43 +59,6 @@ def extract_seeds(info):
     """Extract the seeds given an info dict"""
     seeds_list = [d['level_seed'] for d in info]
     return seeds_list
-
-
-class DemoLRScheduler:
-    """Learning rate scheduler for HIPPO. Currently only supports a linear schedule"""
-
-    def __init__(self, args, params):
-        self.schedule_type = params.demo_lr_schedule
-        self.demo_learn_ratio = params.demo_learn_ratio
-        self.num_timesteps = args.num_timesteps
-        self.params = params
-        self.args = args
-
-        self.i = 0
-
-        if not self.schedule_type:
-            self.schedule = None
-        elif self.schedule_type == 'linear_inc':
-            self._generate_linear_schedule(0.0002, 0.0008)
-        elif self.schedule_type == 'linear_dec':
-            self._generate_linear_schedule(0.0008, 0.0002)
-        else:
-            raise NotImplementedError
-
-    def _generate_linear_schedule(self, start_rate, end_rate):
-        """Create a linear schedule"""
-        learn_every = self.params.n_envs * self.params.n_steps * (1 / self.demo_learn_ratio)
-        num_learn_steps = math.ceil(self.num_timesteps / learn_every)
-        self.schedule = np.linspace(start_rate, end_rate, num_learn_steps)
-
-    def get_lr(self):
-        """Return the current learning rate"""
-        if self.schedule is None:
-            return None
-        else:
-            lr = self.schedule[self.i]
-            self.i += 1
-            return lr
 
 
 def visualise(arr):

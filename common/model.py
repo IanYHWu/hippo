@@ -24,9 +24,7 @@ init_tanh_ = lambda m: init(m, nn.init.orthogonal_, lambda x: nn.init.
 
 
 def apply_init_(modules):
-    """
-    Initialise NN modules
-    """
+    """Initialise NN modules"""
     for m in modules:
         if isinstance(m, nn.Conv2d):
             nn.init.xavier_uniform_(m.weight)
@@ -39,9 +37,8 @@ def apply_init_(modules):
 
 
 class Flatten(nn.Module):
-    """
-    Flatten a tensor
-    """
+    """Flatten a tensor"""
+
     def forward(self, x):
         return x.reshape(x.size(0), -1)
 
@@ -53,9 +50,7 @@ class DeviceAwareModule(nn.Module):
 
 
 class Conv2d_tf(nn.Conv2d):
-    """
-    Conv2d with the padding behavior from TF. Used for the ResNet implementation
-    """
+    """Conv2d with the padding behavior from TF. Used for the ResNet implementation"""
 
     def __init__(self, *args, **kwargs):
         super(Conv2d_tf, self).__init__(*args, **kwargs)
@@ -101,9 +96,7 @@ class Conv2d_tf(nn.Conv2d):
 
 
 class NNBase(nn.Module):
-    """
-    Actor-Critic network (base class)
-    """
+    """Actor-Critic network (base class)"""
 
     def __init__(self, recurrent, recurrent_input_size, hidden_size):
         super(NNBase, self).__init__()
@@ -192,9 +185,7 @@ class NNBase(nn.Module):
 
 
 class MLPBase(NNBase):
-    """
-    Multi-Layer Perceptron
-    """
+    """Multi-Layer Perceptron"""
 
     def __init__(self, num_inputs, recurrent=False, hidden_size=64):
         super(MLPBase, self).__init__(recurrent, num_inputs, hidden_size)
@@ -227,9 +218,7 @@ class MLPBase(NNBase):
 
 
 class BasicBlock(nn.Module):
-    """
-    Residual Network Block
-    """
+    """Residual Network Block"""
 
     def __init__(self, n_channels, stride=1):
         super(BasicBlock, self).__init__()
@@ -256,9 +245,7 @@ class BasicBlock(nn.Module):
 
 
 class ResNetBase(NNBase):
-    """
-    Residual Network, ResNet variant. Our standard CNN class
-    """
+    """Residual Network, ResNet variant. Our standard CNN class"""
 
     def __init__(self, num_inputs, input_h=64, input_w=64, recurrent=False, hidden_size=256, channels=[16, 32, 32]):
         super(ResNetBase, self).__init__(recurrent, num_inputs, hidden_size)
