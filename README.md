@@ -1,7 +1,5 @@
 # HIPPO: Human-Involved Proximal Policy Optimisation 
-Reinforcement Learning MSc Project with UCL DARK
-
-WORK IN PROGRESS
+Reinforcement Learning MSc Project at UCL DARK
 
 HIPPO interleaves environment-learning steps with demonstration-learning steps to improve the performance of PPO. 
 The algorithm learns to decide when to learn from a demonstration, and what the demonstration should be of. We aim to 
